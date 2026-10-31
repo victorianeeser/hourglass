@@ -13,5 +13,6 @@ A personal billable-time tracker for freelance design work. Start a timer for a 
 ## Files
 
 - `manifest.json` — tells Chrome what the extension is and what it can do
-- `shared/data.js` — all saving and loading (clients, entries, timer)
-- `popup/` — the toolbar popup
+- `shared/data.js` — all saving and loading (clients, entries, timer) plus totals math
+- `popup/` — the toolbar popup: `popup.js` draws one screen at a time, `popup.css` has the design
+- `fonts/` — DM Sans (Open Font License), bundled so the extension never goes online

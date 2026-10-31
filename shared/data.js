@@ -3,7 +3,7 @@
 // (and later the background worker and the pill) all behave the same way.
 //
 // Everything lives in chrome.storage.local:
-//   clients:      [{ id, name, color, rate, archived? }]
+//   clients:      [{ id, name, color, rate, note, archived? }]
 //   entries:      [{ id, clientId, task, note, start, end, rate }]   (times are ms timestamps)
 //   timer:        null, or { status: 'running' | 'paused', clientId, task, note, start, carriedMs }
 //   lastClientId: the client used most recently (preselected next time)
@@ -48,9 +48,9 @@ export function findClient(state, id) {
 
 // ---------- Clients ----------
 
-export async function addClient({ name, color, rate }) {
+export async function addClient({ name, color, rate, note = '' }) {
   const { clients } = await getState();
-  clients.push({ id: crypto.randomUUID(), name, color, rate });
+  clients.push({ id: crypto.randomUUID(), name, color, rate, note });
   await chrome.storage.local.set({ clients });
 }
 
@@ -175,6 +175,54 @@ export function entryAmount(entry) {
   return (entryMs(entry) / 3600000) * entry.rate;
 }
 
+// Time and money worked between two moments (optionally for one client),
+// counting saved entries plus the stretch that is running right now.
+export function workedBetween(state, from, to, clientId = null, now = Date.now()) {
+  let ms = 0;
+  let amount = 0;
+  const add = (start, end, rate, entryClientId) => {
+    if (clientId && entryClientId !== clientId) return;
+    const s = Math.max(start, from);
+    const e = Math.min(end, to);
+    if (e <= s) return;
+    ms += e - s;
+    amount += ((e - s) / 3600000) * rate;
+  };
+  for (const e of state.entries) add(e.start, e.end, e.rate, e.clientId);
+  const t = state.timer;
+  if (t && t.status === 'running') {
+    const client = findClient(state, t.clientId);
+    add(t.start, now, client ? client.rate : 0, t.clientId);
+  }
+  return { ms, amount };
+}
+
+// Midnight today, as a timestamp
+export function startOfToday(now = Date.now()) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+// Midnight on Monday of this week
+export function startOfWeek(now = Date.now()) {
+  const d = new Date(startOfToday(now));
+  const daysSinceMonday = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - daysSinceMonday);
+  return d.getTime();
+}
+
+// The most recently finished entry, or undefined
+export function lastEntry(state) {
+  return state.entries.reduce((latest, e) => (!latest || e.end > latest.end ? e : latest), undefined);
+}
+
+// 2520000 → "0h 42m"
+export function formatHours(ms) {
+  const minutes = Math.floor(ms / 60000);
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
 // 3725000 → "1:02:05"
 export function formatDuration(ms) {
   const total = Math.floor(ms / 1000);
@@ -184,8 +232,17 @@ export function formatDuration(ms) {
   return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export function formatMoney(amount) {
-  return '$' + amount.toFixed(2);
+// formatMoney(1075) → "$1,075.00", formatMoney(1075, 0) → "$1,075"
+export function formatMoney(amount, decimals = 2) {
+  return '$' + amount.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+// 75 → "$75/hr", 72.5 → "$72.50/hr"
+export function formatRate(rate) {
+  return formatMoney(rate, Number.isInteger(rate) ? 0 : 2) + '/hr';
 }
 
 export function formatTime(timestamp) {
