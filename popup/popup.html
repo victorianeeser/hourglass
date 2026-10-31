@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Hourglass</title>
+  <!-- Plain on purpose for now. The real design gets applied once the logic works. -->
+  <style>
+    body { width: 360px; min-height: 520px; margin: 0; padding: 12px; box-sizing: border-box; font-family: sans-serif; font-size: 13px; }
+    label { display: block; margin: 4px 0; }
+    #message { color: #D9482B; }
+  </style>
+</head>
+<body>
+  <h1>Hourglass</h1>
+  <p id="message"></p>
+
+  <section>
+    <h2>Timer</h2>
+    <div id="timer"></div>
+  </section>
+
+  <section>
+    <h2>Clients</h2>
+    <ul id="client-list"></ul>
+    <form id="client-form">
+      <label>Name <input name="clientName" required></label>
+      <label>Color <select name="color"></select></label>
+      <label>Hourly rate ($) <input name="rate" type="number" min="0" step="0.01" required></label>
+      <button type="submit" id="client-submit">Add client</button>
+      <button type="button" id="client-cancel" hidden>Cancel</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Recent entries</h2>
+    <ul id="entry-list"></ul>
+  </section>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
