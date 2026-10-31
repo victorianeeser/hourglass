@@ -289,9 +289,9 @@ button { cursor: pointer; }
 button.row { transition: background-color 100ms; }
 button.row:hover { background: var(--hover); }
 .row[aria-pressed="true"] { background: var(--hover); font-weight: 600; }
-.row .meta { color: var(--muted); font-variant-numeric: tabular-nums; }
+.row .meta { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .row .meta.money { color: var(--ink); font-weight: 500; }
-.row .meta.hours { width: 52px; text-align: right; }
+.row .meta.hours { min-width: 56px; text-align: right; }
 .row .chev { color: var(--faint); margin-right: -4px; }
 .row .check { color: var(--ink); }
 
