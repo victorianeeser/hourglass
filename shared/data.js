@@ -31,6 +31,12 @@ export const CLIENT_COLORS = {
 
 const DEFAULTS = { clients: [], entries: [], timer: null, lastClientId: null };
 
+// crypto.randomUUID only exists on https pages, and the pill also runs on plain http pages.
+function newId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
 // ---------- Reading ----------
 
 export async function getState() {
@@ -50,7 +56,7 @@ export function findClient(state, id) {
 
 export async function addClient({ name, color, rate, note = '' }) {
   const { clients } = await getState();
-  clients.push({ id: crypto.randomUUID(), name, color, rate, note });
+  clients.push({ id: newId(), name, color, rate, note });
   await chrome.storage.local.set({ clients });
 }
 
@@ -83,7 +89,7 @@ function closeRunningStretch(state, now) {
   if (length < 1000) return length; // ignore accidental double-clicks
   const client = findClient(state, t.clientId);
   state.entries.push({
-    id: crypto.randomUUID(),
+    id: newId(),
     clientId: t.clientId,
     task: t.task,
     note: t.note,

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Hourglass",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Manual billable-time tracker for freelance design work. All data stays on your computer.",
   "icons": {
     "16": "icons/icon16.png",
@@ -21,6 +21,19 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["pill/pill.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["shared/data.js", "fonts/DMSans-Variable.ttf"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "commands": {
     "_execute_action": {
       "suggested_key": { "default": "Alt+Shift+H" },

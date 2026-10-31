@@ -49,5 +49,19 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && (changes.timer || changes.clients)) updateBadge();
 });
 
+// The pill's "Open dashboard" button. Content scripts can't open the popup
+// themselves, so they ask here. If Chrome won't open it, show it in a tab.
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === 'open-dashboard') openDashboard();
+});
+
+async function openDashboard() {
+  try {
+    await chrome.action.openPopup();
+  } catch (err) {
+    await chrome.tabs.create({ url: chrome.runtime.getURL('popup/popup.html') });
+  }
+}
+
 chrome.runtime.onStartup.addListener(updateBadge);
 chrome.runtime.onInstalled.addListener(updateBadge);
