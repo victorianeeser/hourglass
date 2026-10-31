@@ -219,6 +219,22 @@ button.row:hover { background: var(--cream); }
 .input::placeholder { color: var(--muted); opacity: 0.8; }
 .input:focus { outline: none; border-color: var(--mocha); }
 
+select.input {
+  appearance: none;
+  padding-right: 28px;
+  background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236E6862' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;
+}
+
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pair[hidden] { display: none; }
+
+.duration { display: flex; align-items: center; gap: 8px; }
+.duration strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.preview-count { font-size: 15px; font-weight: 600; }
+
+.btn:disabled { opacity: 0.5; cursor: default; filter: none; }
+
 .swatches { display: flex; gap: 10px; }
 .swatch {
   width: 24px;

@@ -13,7 +13,9 @@ let liveTexts = []; // bits of text (clock, totals) refreshed every second
 
 // Screens that only show data redraw when storage changes.
 // Form screens don't, so whatever you're typing isn't wiped out.
-const LIVE_SCREENS = new Set(['dashboard', 'clients', 'switch']);
+const LIVE_SCREENS = new Set(['dashboard', 'clients', 'switch', 'entries']);
+
+let entriesRange = 'week'; // the Entries filter, remembered while the popup is open
 
 // ---------- Helpers ----------
 
@@ -33,6 +35,17 @@ function liveText(getText, props = {}) {
 
 function dot(color) {
   return el('span', { className: 'dot', style: `background: ${data.CLIENT_COLORS[color]}` });
+}
+
+// A dropdown: select([[value, label], ...], selectedValue)
+function select(options, selected) {
+  return el('select', { className: 'input' }, ...options.map(([value, label]) =>
+    el('option', { value, selected: value === selected }, label),
+  ));
+}
+
+function field(label, input) {
+  return el('label', { className: 'field' }, el('span', {}, label), input);
 }
 
 function go(name, params = {}) {
@@ -91,7 +104,7 @@ function screen({ title, back, logo = false, links = [], body = [], footer = nul
 function dashboardScreen() {
   const clients = data.activeClients(state);
   const links = [
-    el('button', { className: 'link', onclick: () => go('soon', { title: 'Entries' }) }, 'Entries'),
+    el('button', { className: 'link', onclick: () => go('entries') }, 'Entries'),
     el('button', { className: 'link', onclick: () => go('clients') }, 'Clients'),
   ];
 
@@ -121,8 +134,8 @@ function dashboardScreen() {
       byClientRows(),
     ],
     footer: [
-      el('button', { className: 'btn btn-outline btn-half', onclick: () => go('soon', { title: 'Add past time' }) }, 'Add past time'),
-      el('button', { className: 'btn btn-outline btn-half', onclick: () => go('soon', { title: 'Export' }) }, 'Export CSV'),
+      el('button', { className: 'btn btn-outline btn-half', onclick: () => go('past', { from: 'dashboard' }) }, 'Add past time'),
+      el('button', { className: 'btn btn-outline btn-half', onclick: () => go('export') }, 'Export CSV'),
     ],
   });
 }
@@ -366,13 +379,217 @@ function clientScreen({ id, from = 'clients' }) {
   });
 }
 
-// ---------- Placeholder for screens in later layers ----------
+// ---------- Entries ----------
 
-function soonScreen({ title }) {
+function entriesScreen() {
+  const ranges = ['today', 'week', 'month'];
+  const { from, to } = data.dateRange(entriesRange);
+  const entries = data.entriesBetween(state, from, to);
+
+  // Group by day, newest day first (entries are already newest first)
+  const days = new Map();
+  for (const e of entries) {
+    const day = data.startOfToday(e.start);
+    if (!days.has(day)) days.set(day, []);
+    days.get(day).push(e);
+  }
+
+  const groups = [];
+  for (const [day, dayEntries] of days) {
+    groups.push(
+      el('div', { className: 'label' }, data.formatDayLabel(day)),
+      el('div', { className: 'rows' }, ...dayEntries.map((e) => {
+        const client = data.findClient(state, e.clientId);
+        return el('button', { className: 'row', onclick: () => go('entry', { id: e.id }) },
+          dot(client.color),
+          el('span', { className: 'grow' }, `${client.name} · ${e.task}`),
+          el('span', { className: 'meta' }, data.formatShortDuration(data.entryMs(e))),
+        );
+      })),
+    );
+  }
+
   return screen({
-    title,
+    title: 'Entries',
     back: () => go('dashboard'),
-    body: [el('p', { className: 'small muted' }, 'Coming in a later layer.')],
+    body: [
+      el('div', { className: 'chips' }, ...ranges.map((name) =>
+        el('button', {
+          className: 'chip',
+          ariaPressed: String(name === entriesRange),
+          onclick: () => { entriesRange = name; render(); },
+        }, data.RANGES[name]),
+      )),
+      entries.length === 0 ? el('p', { className: 'small muted' }, 'No entries in this period.') : null,
+      ...groups,
+    ],
+    footer: [el('button', { className: 'btn btn-outline btn-block', onclick: () => go('past', { from: 'entries' }) }, 'Add past time')],
+  });
+}
+
+// ---------- Edit entry and Add past time share one form ----------
+
+// Builds the form fields. `entry` is the entry being edited, or null for past time.
+function entryForm(entry) {
+  const clients = data.activeClients(state);
+  const current = entry && data.findClient(state, entry.clientId);
+  if (current && current.archived) clients.unshift(current); // a deleted client's old entry
+
+  const clientOptions = clients.map((c) => [c.id, c.name]);
+  if (!entry) clientOptions.unshift(['', 'Choose client']);
+  const clientSel = select(clientOptions, entry ? entry.clientId : '');
+
+  const tasks = data.TASKS.includes(entry && entry.task) || !entry ? data.TASKS : [...data.TASKS, entry.task];
+  const taskSel = select(tasks.map((t) => [t, t]), entry ? entry.task : 'Other');
+
+  // Past time defaults to the hour that just ended, on the quarter hour
+  const now = Date.now();
+  const roundedNow = now - (now % (15 * 60000));
+  const start = entry ? entry.start : roundedNow - 3600000;
+  const end = entry ? entry.end : roundedNow;
+
+  const dateInput = el('input', { className: 'input', type: 'date', value: data.toDateInput(start), max: data.toDateInput(now) });
+  const startInput = el('input', { className: 'input', type: 'time', value: data.toTimeInput(start) });
+  const endInput = el('input', { className: 'input', type: 'time', value: data.toTimeInput(end) });
+  const noteInput = el('input', { className: 'input', placeholder: entry ? 'Note' : 'e.g. Paper sketches for logo', maxLength: 200, value: entry ? entry.note || '' : '' });
+
+  const values = () => ({
+    clientId: clientSel.value,
+    task: taskSel.value,
+    note: noteInput.value.trim(),
+    ...data.timesFromInputs(dateInput.value, startInput.value, endInput.value),
+  });
+
+  // "1h 20m · $100.00", updated as you type
+  const duration = el('strong');
+  function updateDuration() {
+    const v = values();
+    const client = data.findClient(state, v.clientId);
+    const rate = entry && v.clientId === entry.clientId ? entry.rate : client ? client.rate : 0;
+    const ms = v.end - v.start;
+    duration.textContent = ms > 0 ? `${data.formatHours(ms)} · ${data.formatMoney((ms / 3600000) * rate)}` : '—';
+  }
+  for (const input of [clientSel, dateInput, startInput, endInput]) input.addEventListener('input', updateDuration);
+  updateDuration();
+
+  const fields = el('div', { className: 'stack' },
+    field('Client', clientSel),
+    field('Task', taskSel),
+    field('Date', dateInput),
+    el('div', { className: 'pair' }, field('Start', startInput), field('End', endInput)),
+    el('div', { className: 'duration' }, el('span', { className: 'label' }, 'Duration'), duration),
+    field(entry ? 'Note' : 'Note (optional)', noteInput),
+  );
+  return { fields, values };
+}
+
+function entryScreen({ id }) {
+  const entry = state.entries.find((e) => e.id === id);
+  if (!entry) return entriesScreen();
+  const { fields, values } = entryForm(entry);
+
+  const remove = () => {
+    if (confirm('Delete this entry?')) act(() => data.deleteEntry(id), 'entries');
+  };
+
+  return screen({
+    title: 'Edit entry',
+    back: () => go('entries'),
+    body: [fields],
+    footer: [
+      el('button', { className: 'btn btn-delete-text', onclick: remove }, 'Delete'),
+      el('span', { className: 'spacer' }),
+      el('button', { className: 'btn btn-go', onclick: () => act(() => data.updateEntry(id, values()), 'entries') }, 'Save'),
+    ],
+  });
+}
+
+function pastScreen({ from = 'dashboard' }) {
+  if (data.activeClients(state).length === 0) return clientScreen({ from });
+  const { fields, values } = entryForm(null);
+  return screen({
+    title: 'Add past time',
+    back: () => go(from),
+    body: [fields],
+    footer: [el('button', { className: 'btn btn-go btn-block', onclick: () => act(() => data.addEntry(values()), from) }, 'Add time')],
+  });
+}
+
+// ---------- Export CSV ----------
+
+function exportScreen() {
+  const rangeOptions = [...Object.entries(data.RANGES), ['custom', 'Custom dates']];
+  const rangeSel = select(rangeOptions, 'week');
+
+  // Clients still in use, plus deleted ones that have entries
+  const withEntries = new Set(state.entries.map((e) => e.clientId));
+  const clients = state.clients.filter((c) => !c.archived || withEntries.has(c.id));
+  const clientSel = select([['', 'All clients'], ...clients.map((c) => [c.id, c.archived ? `${c.name} (deleted)` : c.name])], '');
+
+  const today = data.toDateInput(Date.now());
+  const fromInput = el('input', { className: 'input', type: 'date', value: today, max: today });
+  const toInput = el('input', { className: 'input', type: 'date', value: today, max: today });
+  const customDates = el('div', { className: 'pair', hidden: true }, field('From', fromInput), field('To', toInput));
+
+  const count = el('div', { className: 'preview-count' });
+  const totals = el('div', { className: 'muted' });
+  const download = el('button', { className: 'btn btn-go btn-block' }, 'Download CSV');
+
+  // The chosen period as timestamps; custom "To" includes that whole day
+  function period() {
+    if (rangeSel.value !== 'custom') return data.dateRange(rangeSel.value);
+    const from = new Date(`${fromInput.value}T00:00`).getTime();
+    const to = data.addDays(new Date(`${toInput.value}T00:00`).getTime(), 1);
+    return { from, to };
+  }
+
+  function chosenEntries() {
+    const { from, to } = period();
+    return data.entriesBetween(state, from, to, clientSel.value || null);
+  }
+
+  function update() {
+    customDates.hidden = rangeSel.value !== 'custom';
+    const entries = chosenEntries();
+    const total = data.totalOf(entries);
+    count.textContent = `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`;
+    totals.textContent = `${data.formatHours(total.ms)} · ${data.formatMoney(total.amount)}`;
+    download.disabled = entries.length === 0;
+  }
+  for (const input of [rangeSel, clientSel, fromInput, toInput]) input.addEventListener('input', update);
+  update();
+
+  download.addEventListener('click', () => {
+    const entries = chosenEntries();
+    const csv = data.entriesToCsv(state, entries);
+    // File name like hourglass-2026-10-27-to-2026-11-02-bloom-florals.csv
+    const times = entries.map((e) => e.start);
+    const client = data.findClient(state, clientSel.value);
+    const name = [
+      'hourglass',
+      data.toDateInput(Math.min(...times)),
+      'to',
+      data.toDateInput(Math.max(...times)),
+      client ? client.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : null,
+    ].filter(Boolean).join('-');
+    // A data: link (not a blob) so the download still works if the popup closes for a save dialog.
+    // The ﻿ mark tells Excel the file is UTF-8 so accents and emoji survive.
+    const link = el('a', { href: 'data:text/csv;charset=utf-8,' + encodeURIComponent('﻿' + csv), download: `${name}.csv` });
+    document.body.append(link);
+    link.click();
+    link.remove();
+  });
+
+  return screen({
+    title: 'Export',
+    back: () => go('dashboard'),
+    body: [
+      field('Date range', rangeSel),
+      customDates,
+      field('Client', clientSel),
+      el('div', { className: 'card' }, el('div', { className: 'label' }, 'Preview'), count, totals),
+    ],
+    footer: [download],
   });
 }
 
@@ -382,7 +599,10 @@ const screens = {
   switch: switchScreen,
   clients: clientsScreen,
   client: clientScreen,
-  soon: soonScreen,
+  entries: entriesScreen,
+  entry: entryScreen,
+  past: pastScreen,
+  export: exportScreen,
 };
 
 // ---------- Start up ----------

@@ -263,3 +263,163 @@ export function formatRate(rate) {
 export function formatTime(timestamp) {
   return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
+
+// 4800000 → "1:20" (hours:minutes, for entry rows)
+export function formatShortDuration(ms) {
+  const minutes = Math.floor(ms / 60000);
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+// "Today", "Yesterday", or e.g. "Mon, Oct 27"
+export function formatDayLabel(timestamp, now = Date.now()) {
+  const day = startOfToday(timestamp);
+  const today = startOfToday(now);
+  if (day === today) return 'Today';
+  if (day === addDays(today, -1)) return 'Yesterday';
+  return new Date(timestamp).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+// ---------- Entries (editing, past time) ----------
+
+function checkEntry(entry, state) {
+  if (!findClient(state, entry.clientId)) throw new Error('Choose a client.');
+  if (Number.isNaN(entry.start) || Number.isNaN(entry.end)) throw new Error('Enter a start and end time.');
+  if (entry.end <= entry.start) throw new Error('End time must be after start time.');
+  if (entry.end > Date.now() + 60000) throw new Error("That time hasn't happened yet.");
+}
+
+// For work done away from the computer (sketching, calls)
+export async function addEntry({ clientId, task, note, start, end }) {
+  const state = await getState();
+  const entry = { id: newId(), clientId, task, note, start, end, rate: 0 };
+  checkEntry(entry, state);
+  entry.rate = findClient(state, clientId).rate;
+  state.entries.push(entry);
+  await chrome.storage.local.set({ entries: state.entries });
+}
+
+export async function updateEntry(id, changes) {
+  const state = await getState();
+  const entry = state.entries.find((e) => e.id === id);
+  if (!entry) throw new Error('That entry no longer exists.');
+  const updated = { ...entry, ...changes };
+  checkEntry(updated, state);
+  // Moving work to another client bills it at that client's rate
+  if (updated.clientId !== entry.clientId) updated.rate = findClient(state, updated.clientId).rate;
+  Object.assign(entry, updated);
+  await chrome.storage.local.set({ entries: state.entries });
+}
+
+export async function deleteEntry(id) {
+  const { entries } = await getState();
+  await chrome.storage.local.set({ entries: entries.filter((e) => e.id !== id) });
+}
+
+// Entries that started between two moments (optionally for one client), newest first
+export function entriesBetween(state, from, to, clientId = null) {
+  return state.entries
+    .filter((e) => e.start >= from && e.start < to && (!clientId || e.clientId === clientId))
+    .sort((a, b) => b.start - a.start);
+}
+
+export function totalOf(entries) {
+  return entries.reduce(
+    (sum, e) => ({ ms: sum.ms + entryMs(e), amount: sum.amount + entryAmount(e) }),
+    { ms: 0, amount: 0 },
+  );
+}
+
+// ---------- Dates ----------
+
+// Calendar-safe (handles daylight saving changes)
+export function addDays(timestamp, days) {
+  const d = new Date(timestamp);
+  d.setDate(d.getDate() + days);
+  return d.getTime();
+}
+
+function startOfMonth(now = Date.now()) {
+  const d = new Date(startOfToday(now));
+  d.setDate(1);
+  return d.getTime();
+}
+
+function addMonths(timestamp, months) {
+  const d = new Date(timestamp);
+  d.setMonth(d.getMonth() + months);
+  return d.getTime();
+}
+
+// Named ranges used by the Entries and Export screens → { from, to }
+export const RANGES = {
+  today: 'Today',
+  week: 'This week',
+  lastWeek: 'Last week',
+  month: 'This month',
+  lastMonth: 'Last month',
+  all: 'All time',
+};
+
+export function dateRange(name, now = Date.now()) {
+  const today = startOfToday(now);
+  const week = startOfWeek(now);
+  const month = startOfMonth(now);
+  switch (name) {
+    case 'today': return { from: today, to: addDays(today, 1) };
+    case 'week': return { from: week, to: addDays(week, 7) };
+    case 'lastWeek': return { from: addDays(week, -7), to: week };
+    case 'month': return { from: month, to: addMonths(month, 1) };
+    case 'lastMonth': return { from: addMonths(month, -1), to: month };
+    default: return { from: 0, to: Infinity };
+  }
+}
+
+// Values for <input type="date"> ("2026-10-27") and <input type="time"> ("14:05")
+const pad = (n) => String(n).padStart(2, '0');
+
+export function toDateInput(timestamp) {
+  const d = new Date(timestamp);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export function toTimeInput(timestamp) {
+  const d = new Date(timestamp);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// A date plus start and end times → { start, end } timestamps.
+// An end time earlier than the start means the work ran past midnight.
+export function timesFromInputs(date, startTime, endTime) {
+  const start = new Date(`${date}T${startTime}`).getTime();
+  let end = new Date(`${date}T${endTime}`).getTime();
+  if (end < start) end = addDays(end, 1);
+  return { start, end };
+}
+
+// ---------- CSV export ----------
+
+function csvCell(value) {
+  let text = String(value);
+  if (/^[=+@]/.test(text)) text = "'" + text; // stop spreadsheets treating notes as formulas
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+// One row per entry, oldest first, ready for a spreadsheet or invoice
+export function entriesToCsv(state, entries) {
+  const header = ['Date', 'Client', 'Task', 'Note', 'Start', 'End', 'Hours', 'Rate', 'Amount'];
+  const rows = [...entries].sort((a, b) => a.start - b.start).map((e) => {
+    const client = findClient(state, e.clientId);
+    return [
+      toDateInput(e.start),
+      client ? client.name : '',
+      e.task,
+      e.note || '',
+      toTimeInput(e.start),
+      toTimeInput(e.end),
+      (entryMs(e) / 3600000).toFixed(2),
+      e.rate.toFixed(2),
+      entryAmount(e).toFixed(2),
+    ];
+  });
+  return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
+}
