@@ -120,7 +120,7 @@
   }
 
   function dot(color) {
-    return el('span', { className: 'dot', style: `background: ${data.CLIENT_COLORS[color]}` });
+    return el('span', { className: 'dot', style: `background: ${data.colorHex(color)}` });
   }
 
   function clock(className) {

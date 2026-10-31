@@ -26,15 +26,28 @@ export const TASK_GROUPS = [
 ];
 export const TASKS = TASK_GROUPS.flatMap(([, tasks]) => tasks);
 
-// Client palette (same values as the CSS variables in CLAUDE.md)
+// Client palette: a rainbow, in order. Picked so every pair is clearly different
+// (checked with a color-difference validator) and so none of them can be mistaken
+// for the status colors: crimson is deeper than delete-red, lime is greener than
+// paused-amber, and forest is darker than running-green.
 export const CLIENT_COLORS = {
-  coral: '#EE6A4D',
-  peony: '#E66A9E',
-  lilac: '#8F73E3',
-  cobalt: '#3F6FDB',
-  sky: '#45A9E0',
-  lagoon: '#1E9D93',
+  crimson: '#A8233F',
+  tangerine: '#E8781E',
+  lime: '#A6AA0E',
+  forest: '#2F7A2F',
+  lagoon: '#119EAE',
+  cobalt: '#2E4FBF',
+  violet: '#9446D6',
+  peony: '#EE6FA5',
 };
+
+// Names from the first palette, so older clients still get a matching color
+export const COLOR_ALIASES = { coral: 'tangerine', lilac: 'violet', sky: 'lagoon' };
+
+// A client's color name → hex (muted gray if it's somehow unknown)
+export function colorHex(name) {
+  return CLIENT_COLORS[name] || CLIENT_COLORS[COLOR_ALIASES[name]] || '#6E6862';
+}
 
 const DEFAULTS = { clients: [], entries: [], timer: null, lastClientId: null };
 

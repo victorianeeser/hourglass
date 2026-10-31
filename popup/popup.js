@@ -34,7 +34,7 @@ function liveText(getText, props = {}) {
 }
 
 function dot(color) {
-  return el('span', { className: 'dot', style: `background: ${data.CLIENT_COLORS[color]}` });
+  return el('span', { className: 'dot', style: `background: ${data.colorHex(color)}` });
 }
 
 // A dropdown: select([[value, label], ...], selectedValue)
@@ -275,7 +275,7 @@ function byClientRows() {
   return el('div', { className: 'rows' }, ...clients.map((c) =>
     el('div', {
       className: 'row share',
-      style: `--c: ${data.CLIENT_COLORS[c.color]}; --share: ${(weekOf(c.id).ms / most) * 100}%`,
+      style: `--c: ${data.colorHex(c.color)}; --share: ${(weekOf(c.id).ms / most) * 100}%`,
     },
       dot(c.color),
       el('span', { className: 'grow' }, c.name),
@@ -303,7 +303,7 @@ function startScreen({ clientId: chosen } = {}) {
   // Redraw the client list and task chips to show what's picked.
   // The picked task chip uses the picked client's color, as in Figma.
   function update() {
-    const color = data.CLIENT_COLORS[data.findClient(state, clientId).color];
+    const color = data.colorHex(data.findClient(state, clientId).color);
     clientRows.replaceChildren(...clients.map((c) =>
       el('button', { className: 'row', ariaPressed: String(c.id === clientId), onclick: () => { clientId = c.id; update(); } },
         dot(c.color),
@@ -394,9 +394,12 @@ function clientsScreen() {
 // New client when there's no id, edit client when there is.
 function clientScreen({ id, from = 'clients' }) {
   const existing = id ? data.findClient(state, id) : null;
-  const usedColors = data.activeClients(state).map((c) => c.color);
+  // Old color names (coral, lilac, sky) map onto the new rainbow
+  const current = (name) => data.COLOR_ALIASES[name] || name;
+  const usedColors = data.activeClients(state).map((c) => current(c.color));
   const colorNames = Object.keys(data.CLIENT_COLORS);
-  let color = existing ? existing.color : (colorNames.find((n) => !usedColors.includes(n)) || colorNames[0]);
+  // New clients get the first color nobody uses yet, so clients rarely share one
+  let color = existing ? current(existing.color) : (colorNames.find((n) => !usedColors.includes(n)) || colorNames[0]);
 
   const nameInput = el('input', { className: 'input', placeholder: 'e.g. Bloom Florals', maxLength: 60, value: existing ? existing.name : '' });
   const rateInput = el('input', { className: 'input', type: 'number', min: '0', step: '0.01', placeholder: '$0.00', value: existing ? String(existing.rate) : '' });
@@ -407,10 +410,10 @@ function clientScreen({ id, from = 'clients' }) {
     swatches.replaceChildren(...colorNames.map((name) =>
       el('button', {
         className: 'swatch',
-        ariaLabel: name,
-        title: name,
+        ariaLabel: name[0].toUpperCase() + name.slice(1),
+        title: name[0].toUpperCase() + name.slice(1),
         ariaPressed: String(name === color),
-        style: `background: ${data.CLIENT_COLORS[name]}`,
+        style: `background: ${data.colorHex(name)}`,
         onclick: () => { color = name; updateSwatches(); },
       }),
     ));
@@ -784,7 +787,7 @@ function statsScreen() {
       pieces.length === 0 ? el('p', { className: 'small muted' }, `No time logged this ${noun}.`) : null,
       ...breakdown('By client', data.groupPieces(pieces, (p) => p.clientId), total, 'amount', (g) => {
         const client = data.findClient(state, g.key);
-        return { name: client.name, color: data.CLIENT_COLORS[client.color], value: data.formatMoney(g.amount, 0) };
+        return { name: client.name, color: data.colorHex(client.color), value: data.formatMoney(g.amount, 0) };
       }),
       ...breakdown('By task', data.groupPieces(pieces, (p) => p.task).sort((a, b) => b.ms - a.ms), total, 'ms', (g) => (
         { name: g.key, color: null, value: data.formatHours(g.ms) }
