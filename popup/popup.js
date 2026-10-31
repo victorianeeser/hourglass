@@ -98,6 +98,7 @@ function go(name, params = {}) {
 let lastScreen = null; // so only a new screen eases in, not every redraw of the same one
 
 function render() {
+  applyTheme();
   liveTexts = [];
   const node = screens[current.name](current.params);
   if (current.name !== lastScreen) node.classList.add('enter');
@@ -129,6 +130,27 @@ async function actThenClose(action) {
 }
 
 const LOGO_URL = new URL('../icons/logo.png', import.meta.url).href;
+
+// Light or dark: your saved choice, otherwise whatever the computer is set to
+function currentTheme() {
+  if (state.theme) return state.theme;
+  return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyTheme() {
+  document.documentElement.dataset.theme = currentTheme();
+}
+
+function themeToggle() {
+  const dark = currentTheme() === 'dark';
+  const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
+  return el('button', {
+    className: 'icon-btn',
+    ariaLabel: label,
+    title: label,
+    onclick: () => act(() => data.setTheme(dark ? 'light' : 'dark')),
+  }, icon(dark ? 'sun' : 'moon', 16));
+}
 
 function isRunning() {
   return Boolean(state.timer && state.timer.status === 'running');
@@ -170,6 +192,7 @@ function dashboardScreen() {
     el('button', { className: 'nav-link', onclick: () => go('entries') }, 'Entries'),
     el('button', { className: 'nav-link', onclick: () => go('stats') }, 'Stats'),
     el('button', { className: 'nav-link', onclick: () => go('clients') }, 'Clients'),
+    themeToggle(),
   ];
 
   // First run: nothing to track yet

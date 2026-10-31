@@ -48,6 +48,49 @@
   --radius: 10px;
   --shadow-sm: 0 1px 2px rgba(22, 20, 18, 0.05);
   --shadow-md: 0 10px 24px -12px rgba(22, 20, 18, 0.45);
+  --primary-hover: #2C2925;
+  --danger-bg: #FBEAE5;
+  --danger-line: #F3CFC4;
+  --danger-text: #A3341C;
+  --dot-edge: rgba(22, 20, 18, 0.12);
+  --chart-bar: #D9D0C3;
+  --heat: var(--mocha);        /* calendar: busiest days */
+  --heat-base: #F7F4EF;        /* calendar: empty days */
+  --live-bg: var(--ink);       /* the running card */
+  --logo-filter: invert(1);    /* white hourglass on the ink tile */
+}
+
+/* ---------- Dark mode ----------
+   The same names with dark values, so every component switches at once.
+   "ink" stays the strongest color, which in the dark is near-white:
+   primary buttons become light with dark text. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --cream: #121110;
+  --paper: #1C1A17;
+  --sand: #2A2622;
+  --line: #36312B;
+  --muted: #A39B91;
+  --ink: #F2EEE8;
+  --on-ink: #161412;
+  --mocha: #C4A898;
+  --hover: #24211D;
+  --divider: #2A2622;
+  --line-strong: #4A433B;
+  --faint: #6B635A;
+  --paused-text: #F2B65C;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 12px 28px -12px rgba(0, 0, 0, 0.8);
+  --primary-hover: #DDD7CF;
+  --danger-bg: #3A1D17;
+  --danger-line: #5A2A20;
+  --danger-text: #F59A84;
+  --dot-edge: rgba(255, 255, 255, 0.14);
+  --chart-bar: #3E3832;
+  --heat: #C9A58C;
+  --heat-base: #24211D;
+  --live-bg: #0A0908;
+  --logo-filter: none;         /* the tile is light now, so the hourglass stays black */
 }
 
 * { box-sizing: border-box; }
@@ -134,9 +177,9 @@ button { cursor: pointer; }
   flex: none;
   margin: 0;
   padding: 8px 12px;
-  background: #FBEAE5;
-  border-bottom: 1px solid #F3CFC4;
-  color: #A3341C;
+  background: var(--danger-bg);
+  border-bottom: 1px solid var(--danger-line);
+  color: var(--danger-text);
   font-size: 12px;
 }
 .message:empty { display: none; }
@@ -152,7 +195,7 @@ button { cursor: pointer; }
   border-radius: 7px;
   background: var(--ink);
 }
-.brand-mark .logo { height: 13px; width: auto; filter: invert(1); }
+.brand-mark .logo { height: 13px; width: auto; filter: var(--logo-filter); }
 
 /* While a timer runs, the hourglass flips every 15 seconds, like real sand running out.
    It's symmetrical, so jumping back from 180° to 0° is invisible. */
@@ -165,7 +208,7 @@ button { cursor: pointer; }
 .nav { display: flex; gap: 2px; margin-right: -6px; }
 .nav-link {
   height: 28px;
-  padding: 0 9px;
+  padding: 0 7px;
   border: 0;
   border-radius: 6px;
   background: none;
@@ -233,14 +276,14 @@ button { cursor: pointer; }
 /* Primary: ink. Its play icon is the one place green appears on a button,
    because green means "the clock is running". */
 .btn-primary { background: var(--ink); color: var(--on-ink); box-shadow: 0 1px 2px rgba(22, 20, 18, 0.25); }
-.btn-primary:hover:not(:disabled) { background: #2C2925; }
+.btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
 .icon.go { color: var(--running); }
 
 .btn-secondary { background: var(--paper); border-color: var(--line); color: var(--ink); box-shadow: var(--shadow-sm); }
 .btn-secondary:hover:not(:disabled) { background: var(--hover); border-color: var(--line-strong); }
 
 .btn-danger { background: none; color: var(--delete); padding: 0 10px; }
-.btn-danger:hover { background: #FBEAE5; }
+.btn-danger:hover { background: var(--danger-bg); }
 
 /* "▶ Continue Bloom Florals · Figma" */
 .btn-continue { justify-content: flex-start; font-weight: 500; }
@@ -289,9 +332,9 @@ button { cursor: pointer; }
 button.row { transition: background-color 100ms; }
 button.row:hover { background: var(--hover); }
 .row[aria-pressed="true"] { background: var(--hover); font-weight: 600; }
-.row .meta { color: var(--muted); font-variant-numeric: tabular-nums; }
+.row .meta { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .row .meta.money { color: var(--ink); font-weight: 500; }
-.row .meta.hours { width: 52px; text-align: right; }
+.row .meta.hours { min-width: 56px; text-align: right; }
 .row .chev { color: var(--faint); margin-right: -4px; }
 .row .check { color: var(--ink); }
 
@@ -308,7 +351,7 @@ button.row:hover { background: var(--hover); }
 }
 
 /* A faint inner edge keeps light colors (lime, peony) visible on white */
-.dot { width: 8px; height: 8px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(22, 20, 18, 0.12); }
+.dot { width: 8px; height: 8px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--dot-edge); }
 
 .empty-note { margin: 0; padding: 14px 12px; color: var(--muted); font-size: 12px; text-align: center; }
 
@@ -446,7 +489,7 @@ select.input {
   font-size: 11px;
   font-weight: 600;
 }
-.status-pill.running { background: rgba(61, 190, 107, 0.16); color: #7BE09F; }
+.status-pill.running { background: rgba(61, 190, 107, 0.16); color: #7BE09F; } /* sits on the dark running card */
 .status-pill.paused { background: rgba(242, 169, 59, 0.18); color: var(--paused-text); }
 .pause-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--idle); }
 
@@ -464,12 +507,13 @@ select.input {
 }
 
 /* Running: the card goes dark, like the pill on webpages */
-.card.live { background: var(--ink); border-color: var(--ink); color: var(--on-ink); box-shadow: var(--shadow-md); }
+.card.live { background: var(--live-bg); border-color: var(--live-bg); color: #FFFFFF; box-shadow: var(--shadow-md); }
+:root[data-theme="dark"] .card.live { border-color: var(--line); }
 .card.live .tag { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.16); color: rgba(255, 255, 255, 0.92); }
 .card.live .small.muted { color: rgba(255, 255, 255, 0.55); }
-.btn-on-dark { background: rgba(255, 255, 255, 0.1); color: var(--on-ink); }
+.btn-on-dark { background: rgba(255, 255, 255, 0.1); color: #FFFFFF; }
 .btn-on-dark:hover { background: rgba(255, 255, 255, 0.17); }
-.btn-light { background: var(--paper); color: var(--ink); }
+.btn-light { background: #FFFFFF; color: #161412; }
 .btn-light:hover { background: #ECE7DF; }
 
 /* Paused: a calm white card; the clock dims */
@@ -522,7 +566,7 @@ select.input {
   background: var(--ink);
   box-shadow: var(--shadow-md);
 }
-.empty-circle img { height: 26px; filter: invert(1); animation: flip 6s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+.empty-circle img { height: 26px; filter: var(--logo-filter); animation: flip 6s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
 .empty h2 { margin: 6px 0 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
 .empty p { margin: 0 0 6px; color: var(--muted); }
 
@@ -543,7 +587,7 @@ select.input {
   gap: 3px;
   border: 0;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--mocha) var(--level), #F7F4EF);
+  background: color-mix(in srgb, var(--heat) var(--level), var(--heat-base));
   font-variant-numeric: tabular-nums;
   transition: box-shadow 100ms;
 }
@@ -581,10 +625,10 @@ select.input {
 .chart-bars { height: 96px; display: flex; align-items: stretch; gap: 2px; border-bottom: 1px solid var(--line); }
 /* Each column is a full-height hit target; the visible bar sits at the bottom */
 .chart-col { flex: 1; min-width: 0; padding: 0; display: flex; align-items: flex-end; border: 0; background: none; }
-.chart-fill { width: 100%; border-radius: 4px 4px 0 0; background: #D9D0C3; transition: background-color 100ms; }
+.chart-fill { width: 100%; border-radius: 4px 4px 0 0; background: var(--chart-bar); transition: background-color 100ms; }
 .chart-col.current .chart-fill { background: var(--ink); }
-.chart-col:hover .chart-fill, .chart-col:focus-visible .chart-fill { background: var(--mocha); }
-.chart-col.current:hover .chart-fill { background: #2C2925; }
+.chart-col:hover .chart-fill, .chart-col:focus-visible .chart-fill { background: var(--heat); }
+.chart-col.current:hover .chart-fill { background: var(--primary-hover); }
 .chart-col:focus-visible { outline-offset: 0; }
 .chart-axis { margin-top: 5px; display: flex; gap: 2px; }
 .chart-axis span { flex: 1; min-width: 0; text-align: center; font-size: 10px; color: var(--muted); white-space: nowrap; }
@@ -638,6 +682,14 @@ select.input {
 /* ---------- Export ---------- */
 
 .preview-count { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+
+/* ---------- Dark mode extras ---------- */
+
+/* Client colors were picked for a light background; lift them a little in the dark */
+:root[data-theme="dark"] .dot,
+:root[data-theme="dark"] .swatch,
+:root[data-theme="dark"] .row.share::after,
+:root[data-theme="dark"] .stat-bar span { filter: brightness(1.25) saturate(1.05); }
 
 /* Anyone who has asked their computer for less motion gets a still popup */
 @media (prefers-reduced-motion: reduce) {
