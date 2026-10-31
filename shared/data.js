@@ -223,6 +223,15 @@ export function formatHours(ms) {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
+// Short enough for the toolbar badge (about 4 characters):
+// 2520000 → "0:42", 37800000 → "10h"
+export function formatBadge(ms) {
+  const minutes = Math.floor(ms / 60000);
+  const h = Math.floor(minutes / 60);
+  if (h >= 10) return `${h}h`;
+  return `${h}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
 // 3725000 → "1:02:05"
 export function formatDuration(ms) {
   const total = Math.floor(ms / 1000);

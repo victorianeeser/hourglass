@@ -96,6 +96,9 @@ button { cursor: pointer; }
   color: var(--muted);
 }
 .link:hover { color: var(--mocha); }
+.link-accent { color: var(--mocha); font-size: 12px; font-weight: 600; }
+
+.logo { height: 16px; width: auto; flex: none; }
 
 .message { margin: 0; color: var(--delete); font-size: 12px; }
 .message:empty { display: none; }

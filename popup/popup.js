@@ -47,22 +47,34 @@ function render() {
 
 // Runs a save, reloads data, then moves to `nextScreen` (or redraws).
 // Errors show at the top of the screen instead of failing silently.
+// Returns true if the save worked.
 async function act(action, nextScreen) {
   try {
     await action();
     state = await data.getState();
     if (nextScreen) go(nextScreen);
     else render();
+    return true;
   } catch (err) {
     const message = app.querySelector('.message');
     if (message) message.textContent = err.message;
+    return false;
   }
 }
 
+// After starting or switching a timer, close the popup so you can get to work.
+// The badge on the toolbar icon shows it's running.
+async function actThenClose(action) {
+  if (await act(action, 'dashboard')) window.close();
+}
+
+const LOGO_URL = new URL('../icons/logo.png', import.meta.url).href;
+
 // The frame every screen shares: header, error line, scrolling body, footer.
-function screen({ title, back, links = [], body = [], footer = null }) {
+function screen({ title, back, logo = false, links = [], body = [], footer = null }) {
   const header = el('div', { className: 'header' },
     back ? el('button', { className: 'back', ariaLabel: 'Back', onclick: back }, '←') : null,
+    logo ? el('img', { className: 'logo', src: LOGO_URL, alt: '' }) : null,
     el('h1', {}, title),
     ...links,
   );
@@ -87,6 +99,7 @@ function dashboardScreen() {
   if (clients.length === 0 && !state.timer) {
     return screen({
       title: 'Hourglass',
+      logo: true,
       links,
       body: [el('div', { className: 'empty' },
         el('div', { className: 'empty-circle' }),
@@ -99,6 +112,7 @@ function dashboardScreen() {
 
   return screen({
     title: 'Hourglass',
+    logo: true,
     links,
     body: [
       timerCard(),
@@ -119,10 +133,18 @@ function timerCard() {
   if (!t) {
     const last = data.lastEntry(state);
     const lastClient = last && data.findClient(state, last.clientId);
+    // One tap to pick up where you left off (same client, task and note)
+    const canContinue = lastClient && !lastClient.archived;
     return el('div', { className: 'card' },
       el('div', { className: 'label' }, 'No timer running'),
       el('button', { className: 'btn btn-go btn-block', onclick: () => go('start') }, 'Start timer'),
-      el('p', { className: 'small muted' }, last ? `Last: ${lastClient.name} · ${last.task}` : 'Last: No logs yet'),
+      el('div', { className: 'card-top' },
+        el('span', { className: 'small muted grow' }, last ? `Last: ${lastClient.name} · ${last.task}` : 'Last: No logs yet'),
+        canContinue ? el('button', {
+          className: 'link link-accent',
+          onclick: () => actThenClose(() => data.startTimer({ clientId: last.clientId, task: last.task, note: last.note })),
+        }, 'Continue →') : null,
+      ),
     );
   }
 
@@ -213,9 +235,8 @@ function startScreen() {
   }
   update();
 
-  const start = () => act(
+  const start = () => actThenClose(
     () => data.startTimer({ clientId, task, note: noteInput.value.trim() }),
-    'dashboard',
   );
   noteInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') start(); });
 
@@ -247,7 +268,7 @@ function switchScreen() {
     body: [
       el('p', { className: 'small muted' }, `Ends the entry for ${from.name} and starts a new one, keeping the task (${t.task}).`),
       el('div', { className: 'rows' }, ...others.map((c) =>
-        el('button', { className: 'row', onclick: () => act(() => data.switchClient(c.id), 'dashboard') },
+        el('button', { className: 'row', onclick: () => actThenClose(() => data.switchClient(c.id)) },
           dot(c.color),
           el('span', { className: 'grow' }, c.name),
           el('span', { className: 'meta' }, data.formatRate(c.rate)),
