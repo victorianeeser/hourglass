@@ -356,13 +356,13 @@ export function addDays(timestamp, days) {
   return d.getTime();
 }
 
-function startOfMonth(now = Date.now()) {
+export function startOfMonth(now = Date.now()) {
   const d = new Date(startOfToday(now));
   d.setDate(1);
   return d.getTime();
 }
 
-function addMonths(timestamp, months) {
+export function addMonths(timestamp, months) {
   const d = new Date(timestamp);
   d.setMonth(d.getMonth() + months);
   return d.getTime();

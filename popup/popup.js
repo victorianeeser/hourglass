@@ -456,8 +456,142 @@ function clientScreen({ id, from = 'clients' }) {
 
 // ---------- Entries ----------
 
+let calendarMonth = null; // first day of the month the calendar shows
+let selectedDay = null; // the day picked in the calendar
+
+function entryRow(e) {
+  const client = data.findClient(state, e.clientId);
+  return el('button', { className: 'row', onclick: () => go('entry', { id: e.id }) },
+    dot(client.color),
+    el('span', { className: 'grow' }, `${client.name} · ${e.task}`),
+    el('span', { className: 'meta' }, data.formatShortDuration(data.entryMs(e))),
+  );
+}
+
+// Month view: a calendar where each day is shaded by how much you worked,
+// with dots for the clients. Hover a day to peek at it; click to pick it.
+// That day's entries show underneath.
+function calendarView() {
+  const thisMonth = data.startOfMonth();
+  if (calendarMonth === null) calendarMonth = thisMonth;
+  const monthEnd = data.addMonths(calendarMonth, 1);
+  const today = data.startOfToday();
+  const inMonth = (day) => day >= calendarMonth && day < monthEnd;
+  if (selectedDay === null || !inMonth(selectedDay)) selectedDay = inMonth(today) ? today : calendarMonth;
+
+  const monthEntries = data.entriesBetween(state, calendarMonth, monthEnd);
+  const byDay = new Map();
+  for (const e of monthEntries) {
+    const day = data.startOfToday(e.start);
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(e);
+  }
+  const busiest = Math.max(1, ...[...byDay.values()].map((list) => data.totalOf(list).ms));
+  const monthTotal = data.totalOf(monthEntries);
+
+  // The selected (or hovered) day's entries, morning to evening
+  const detail = el('div', { className: 'day-detail' });
+  function showDay(day) {
+    const entries = [...(byDay.get(day) || [])].sort((a, b) => a.start - b.start);
+    const total = data.totalOf(entries);
+    detail.replaceChildren(
+      el('div', { className: 'section-head' },
+        el('span', { className: 'label' }, data.formatDayLabel(day)),
+        el('span', { className: 'label' }, entries.length ? `${data.formatHours(total.ms)} · ${data.formatMoney(total.amount, 0)}` : ''),
+      ),
+      entries.length
+        ? el('div', { className: 'rows' }, ...entries.map(entryRow))
+        : el('p', { className: 'small muted' }, day > today ? 'Nothing yet.' : 'Nothing logged this day.'),
+    );
+  }
+
+  const cells = new Map(); // day → its button, to move the "selected" ring
+  const grid = el('div', { className: 'cal' },
+    ...['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => el('span', { className: 'cal-weekday' }, d)),
+  );
+  // Blank cells so the 1st lands under the right weekday (weeks start Monday)
+  const blanks = (new Date(calendarMonth).getDay() + 6) % 7;
+  for (let i = 0; i < blanks; i++) grid.append(el('span'));
+
+  for (let day = calendarMonth; day < monthEnd; day = data.addDays(day, 1)) {
+    const entries = byDay.get(day) || [];
+    const total = data.totalOf(entries);
+    // Up to 3 dots, biggest client first
+    const perClient = new Map();
+    for (const e of entries) perClient.set(e.clientId, (perClient.get(e.clientId) || 0) + data.entryMs(e));
+    const topClients = [...perClient.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const level = total.ms ? 12 + (total.ms / busiest) * 58 : 0; // how dark the day is, in %
+    const date = new Date(day).getDate();
+    const summary = entries.length
+      ? `${data.formatDayLabel(day)}: ${data.formatHours(total.ms)} · ${data.formatMoney(total.amount)}`
+      : `${data.formatDayLabel(day)}: nothing logged`;
+
+    const classes = ['cal-day'];
+    if (day === today) classes.push('today');
+    if (day > today) classes.push('future');
+    if (level > 45) classes.push('dark');
+    if (day === selectedDay) classes.push('selected');
+
+    const cell = el('button', {
+      className: classes.join(' '),
+      style: `--level: ${level}%`,
+      ariaLabel: summary,
+      title: summary,
+      onmouseenter: () => showDay(day),
+      onfocus: () => showDay(day),
+      onclick: () => {
+        cells.get(selectedDay)?.classList.remove('selected');
+        selectedDay = day;
+        cell.classList.add('selected');
+        showDay(day);
+      },
+    },
+      el('span', { className: 'day-num' }, String(date)),
+      el('span', { className: 'day-dots' }, ...topClients.map(([id]) => dot(data.findClient(state, id).color))),
+    );
+    cells.set(day, cell);
+    grid.append(cell);
+  }
+  // Leaving the calendar goes back to the picked day
+  grid.addEventListener('mouseleave', () => showDay(selectedDay));
+  showDay(selectedDay);
+
+  const changeMonth = (step) => {
+    calendarMonth = data.addMonths(calendarMonth, step);
+    selectedDay = null;
+    render();
+  };
+  const nav = el('div', { className: 'cal-nav' },
+    el('div', { className: 'cal-title' },
+      el('strong', {}, new Date(calendarMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })),
+      el('span', { className: 'small muted' }, `${data.formatHours(monthTotal.ms)} · ${data.formatMoney(monthTotal.amount, 0)}`),
+    ),
+    el('button', { className: 'cal-arrow', ariaLabel: 'Previous month', onclick: () => changeMonth(-1) }, '‹'),
+    el('button', { className: 'cal-arrow', ariaLabel: 'Next month', disabled: calendarMonth >= thisMonth, onclick: () => changeMonth(1) }, '›'),
+  );
+
+  return [nav, grid, detail];
+}
+
 function entriesScreen() {
   const ranges = ['today', 'week', 'month'];
+
+  // "Add past time" from the calendar starts on the picked day (if it's not in the future).
+  // Read when clicked, since picking a day doesn't redraw the screen.
+  const pastDay = () => (entriesRange === 'month' && selectedDay !== null && selectedDay <= data.startOfToday() ? selectedDay : null);
+  const footer = [el('button', { className: 'btn btn-outline btn-block', onclick: () => go('past', { from: 'entries', day: pastDay() }) }, 'Add past time')];
+  const chips = el('div', { className: 'chips' }, ...ranges.map((name) =>
+    el('button', {
+      className: 'chip',
+      ariaPressed: String(name === entriesRange),
+      onclick: () => { entriesRange = name; render(); },
+    }, name === 'month' ? 'Month' : data.RANGES[name]),
+  ));
+
+  if (entriesRange === 'month') {
+    return screen({ title: 'Entries', back: () => go('dashboard'), body: [chips, ...calendarView()], footer });
+  }
+
   const { from, to } = data.dateRange(entriesRange);
   const entries = data.entriesBetween(state, from, to);
 
@@ -473,14 +607,7 @@ function entriesScreen() {
   for (const [day, dayEntries] of days) {
     groups.push(
       el('div', { className: 'label' }, data.formatDayLabel(day)),
-      el('div', { className: 'rows' }, ...dayEntries.map((e) => {
-        const client = data.findClient(state, e.clientId);
-        return el('button', { className: 'row', onclick: () => go('entry', { id: e.id }) },
-          dot(client.color),
-          el('span', { className: 'grow' }, `${client.name} · ${e.task}`),
-          el('span', { className: 'meta' }, data.formatShortDuration(data.entryMs(e))),
-        );
-      })),
+      el('div', { className: 'rows' }, ...dayEntries.map(entryRow)),
     );
   }
 
@@ -488,24 +615,19 @@ function entriesScreen() {
     title: 'Entries',
     back: () => go('dashboard'),
     body: [
-      el('div', { className: 'chips' }, ...ranges.map((name) =>
-        el('button', {
-          className: 'chip',
-          ariaPressed: String(name === entriesRange),
-          onclick: () => { entriesRange = name; render(); },
-        }, data.RANGES[name]),
-      )),
+      chips,
       entries.length === 0 ? el('p', { className: 'small muted' }, 'No entries in this period.') : null,
       ...groups,
     ],
-    footer: [el('button', { className: 'btn btn-outline btn-block', onclick: () => go('past', { from: 'entries' }) }, 'Add past time')],
+    footer,
   });
 }
 
 // ---------- Edit entry and Add past time share one form ----------
 
 // Builds the form fields. `entry` is the entry being edited, or null for past time.
-function entryForm(entry) {
+// `day` (optional) is the date past time should start on.
+function entryForm(entry, day = null) {
   const clients = data.activeClients(state);
   const current = entry && data.findClient(state, entry.clientId);
   if (current && current.archived) clients.unshift(current); // a deleted client's old entry
@@ -529,7 +651,7 @@ function entryForm(entry) {
   const start = entry ? entry.start : roundedNow - 3600000;
   const end = entry ? entry.end : roundedNow;
 
-  const dateInput = el('input', { className: 'input', type: 'date', value: data.toDateInput(start), max: data.toDateInput(now) });
+  const dateInput = el('input', { className: 'input', type: 'date', value: data.toDateInput(day ?? start), max: data.toDateInput(now) });
   const startInput = el('input', { className: 'input', type: 'time', value: data.toTimeInput(start) });
   const endInput = el('input', { className: 'input', type: 'time', value: data.toTimeInput(end) });
   const noteInput = el('input', { className: 'input', placeholder: entry ? 'Note' : 'e.g. Paper sketches for logo', maxLength: 200, value: entry ? entry.note || '' : '' });
@@ -585,9 +707,9 @@ function entryScreen({ id }) {
   });
 }
 
-function pastScreen({ from = 'dashboard' }) {
+function pastScreen({ from = 'dashboard', day = null }) {
   if (data.activeClients(state).length === 0) return clientScreen({ from });
-  const { fields, values } = entryForm(null);
+  const { fields, values } = entryForm(null, day);
   return screen({
     title: 'Add past time',
     back: () => go(from),
