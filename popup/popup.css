@@ -43,7 +43,7 @@ body {
   width: 360px;
   height: 520px;
   overflow: hidden;
-  background: var(--paper);
+  background: var(--cream); /* warm "sand" base instead of plain white */
   color: var(--ink);
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
@@ -64,10 +64,19 @@ button { cursor: pointer; }
   gap: 12px;
 }
 
+/* New screens ease in instead of snapping */
+.screen.enter { animation: screen-in 180ms ease-out; }
+@keyframes screen-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
 .screen-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -79,7 +88,8 @@ button { cursor: pointer; }
 .screen-footer .spacer { flex: 1; }
 
 .header { display: flex; align-items: center; gap: 8px; min-height: 20px; }
-.header h1 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; }
+.header h1 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.header h1.wordmark { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
 
 .back {
   border: 0;
@@ -99,6 +109,14 @@ button { cursor: pointer; }
 .link-accent { color: var(--mocha); font-size: 12px; font-weight: 600; }
 
 .logo { height: 16px; width: auto; flex: none; }
+
+/* While a timer runs, the hourglass flips every 15 seconds, like real sand running out.
+   It's symmetrical, so jumping back from 180° to 0° is invisible. */
+.logo.flipping { animation: flip 15s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+@keyframes flip {
+  0%, 94% { transform: rotate(0deg); }
+  100% { transform: rotate(180deg); }
+}
 
 .message { margin: 0; color: var(--delete); font-size: 12px; }
 .message:empty { display: none; }
@@ -130,7 +148,9 @@ button { cursor: pointer; }
   justify-content: center;
   white-space: nowrap;
 }
+.btn { transition: filter 120ms, transform 120ms, background-color 120ms; }
 .btn:hover { filter: brightness(0.95); }
+.btn:active { transform: scale(0.98); }
 .btn-block { width: 100%; }
 .btn-half { flex: 1; }
 .btn-pill { border-radius: 999px; font-size: 12px; }
@@ -158,13 +178,39 @@ button { cursor: pointer; }
 
 .clock {
   flex: 1;
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 500;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
-.clock.paused { color: var(--muted); }
-.paused-label { color: var(--idle); font-size: 12px; font-weight: 600; }
+.clock .seconds { opacity: 0.45; } /* hours:minutes lead, seconds just tick along */
+
+/* Running: the card goes dark, like the pill on webpages */
+.card.live { background: var(--ink); color: var(--on-ink); }
+.card.live .tag { background: transparent; border-color: rgba(255, 255, 255, 0.24); color: var(--on-ink); }
+.card.live .small.muted { color: rgba(255, 255, 255, 0.6); }
+.card.live .btn-outline { background: transparent; border-color: rgba(255, 255, 255, 0.3); color: var(--on-ink); }
+.card.live .btn-outline:hover { background: rgba(255, 255, 255, 0.08); filter: none; }
+
+/* Paused: back to sand, with an amber edge for "needs attention" */
+.card.paused { box-shadow: inset 3px 0 0 var(--idle); }
+.card.paused .clock { color: var(--muted); }
+
+.status { display: flex; align-items: center; gap: 6px; }
+.status.running { color: var(--running); }
+.status.paused { color: #B97A1C; } /* --idle darkened enough to read on sand */
+
+/* A green dot that breathes while time is being billed */
+.live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--running);
+  animation: breathe 2s ease-out infinite;
+}
+@keyframes breathe {
+  0% { box-shadow: 0 0 0 0 rgba(61, 190, 107, 0.6); }
+  100% { box-shadow: 0 0 0 6px rgba(61, 190, 107, 0); }
+}
+.pause-mark { width: 6px; height: 7px; border-left: 2px solid currentColor; border-right: 2px solid currentColor; }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 
@@ -183,7 +229,14 @@ button { cursor: pointer; }
   text-align: left;
   flex: none;
 }
-button.row:hover { background: var(--cream); }
+button.row { transition: background-color 120ms, padding 120ms; }
+button.row:hover { background: var(--sand); padding: 0 6px; border-radius: 6px; }
+
+/* By client: a thin bar in the client's color shows their share of the week */
+.row.share {
+  background: linear-gradient(var(--c), var(--c)) no-repeat left bottom / var(--share) 2px;
+  border-bottom-color: var(--line);
+}
 .row .meta { color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -198,6 +251,8 @@ button.row:hover { background: var(--cream); }
   align-items: center;
   font-size: 13px;
 }
+.chip { transition: background-color 120ms, color 120ms, border-color 120ms; }
+.chip:hover { border-color: var(--muted); }
 .chip[aria-pressed="true"] {
   background: var(--chip-color, var(--ink));
   border-color: transparent;
@@ -247,9 +302,12 @@ select.input {
 
 /* ---------- Dashboard ---------- */
 
-.totals { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: none; }
-.total { display: flex; flex-direction: column; gap: 2px; }
-.total-value { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.totals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: none; }
+.total {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper);
+}
+.total-value { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 
 .empty {
   margin: auto;
@@ -260,6 +318,15 @@ select.input {
   gap: 8px;
   text-align: center;
 }
-.empty-circle { width: 48px; height: 48px; border-radius: 50%; background: var(--sand); }
+.empty-circle {
+  width: 56px; height: 56px; border-radius: 50%; background: var(--sand);
+  display: grid; place-items: center;
+}
+.empty-circle img { height: 24px; animation: flip 6s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+
+/* Anyone who has asked their computer for less motion gets a still popup */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
 .empty h2 { margin: 0; font-size: 15px; font-weight: 600; }
 .empty p { margin: 0; color: var(--muted); }

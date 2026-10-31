@@ -53,9 +53,14 @@ function go(name, params = {}) {
   render();
 }
 
+let lastScreen = null; // so only a new screen eases in, not every redraw of the same one
+
 function render() {
   liveTexts = [];
-  app.replaceChildren(screens[current.name](current.params));
+  const node = screens[current.name](current.params);
+  if (current.name !== lastScreen) node.classList.add('enter');
+  lastScreen = current.name;
+  app.replaceChildren(node);
 }
 
 // Runs a save, reloads data, then moves to `nextScreen` (or redraws).
@@ -83,12 +88,25 @@ async function actThenClose(action) {
 
 const LOGO_URL = new URL('../icons/logo.png', import.meta.url).href;
 
+function isRunning() {
+  return Boolean(state.timer && state.timer.status === 'running');
+}
+
+// The big clock: "0:42" in full strength, ":10" softer
+function bigClock() {
+  const part = (which) => () => {
+    const [h, m, s] = data.formatDuration(data.sessionMs(state.timer)).split(':');
+    return which === 'main' ? `${h}:${m}` : `:${s}`;
+  };
+  return el('span', { className: 'clock' }, liveText(part('main')), liveText(part('seconds'), { className: 'seconds' }));
+}
+
 // The frame every screen shares: header, error line, scrolling body, footer.
 function screen({ title, back, logo = false, links = [], body = [], footer = null }) {
   const header = el('div', { className: 'header' },
     back ? el('button', { className: 'back', ariaLabel: 'Back', onclick: back }, '←') : null,
-    logo ? el('img', { className: 'logo', src: LOGO_URL, alt: '' }) : null,
-    el('h1', {}, title),
+    logo ? el('img', { className: isRunning() ? 'logo flipping' : 'logo', src: LOGO_URL, alt: '' }) : null,
+    el('h1', { className: logo ? 'wordmark' : '' }, title),
     ...links,
   );
   return el('div', { className: 'screen' },
@@ -115,7 +133,7 @@ function dashboardScreen() {
       logo: true,
       links,
       body: [el('div', { className: 'empty' },
-        el('div', { className: 'empty-circle' }),
+        el('div', { className: 'empty-circle' }, el('img', { src: LOGO_URL, alt: '' })),
         el('h2', {}, 'No clients yet'),
         el('p', {}, 'Add a client to start tracking billable time.'),
         el('button', { className: 'btn btn-go', onclick: () => go('client', { from: 'dashboard' }) }, 'Add client'),
@@ -165,22 +183,27 @@ function timerCard() {
   const running = t.status === 'running';
   const canSwitch = data.activeClients(state).some((c) => c.id !== t.clientId);
 
-  return el('div', { className: 'card' },
+  return el('div', { className: running ? 'card live' : 'card paused' },
+    el('div', { className: `label status ${running ? 'running' : 'paused'}` },
+      el('span', { className: running ? 'live-dot' : 'pause-mark' }),
+      running ? 'Running' : 'Paused',
+    ),
     el('div', { className: 'card-top' },
       dot(client.color),
       el('strong', { className: 'grow' }, client.name),
-      running ? null : el('span', { className: 'paused-label' }, 'Paused'),
       el('span', { className: 'tag' }, t.task),
     ),
     t.note ? el('p', { className: 'small muted' }, t.note) : null,
     el('div', { className: 'card-clock' },
-      liveText(() => data.formatDuration(data.sessionMs(state.timer)), { className: running ? 'clock' : 'clock paused' }),
+      bigClock(),
       canSwitch ? el('button', { className: 'btn btn-outline btn-pill', onclick: () => go('switch') }, 'Switch client →') : null,
     ),
-    running
-      ? el('button', { className: 'btn btn-pause btn-block', onclick: () => act(data.pauseTimer) }, 'Pause')
-      : el('button', { className: 'btn btn-go btn-block', onclick: () => act(data.resumeTimer) }, 'Resume'),
-    el('button', { className: 'btn btn-stop btn-block', onclick: () => act(data.stopTimer) }, 'Stop'),
+    el('div', { className: 'pair' },
+      running
+        ? el('button', { className: 'btn btn-pause', onclick: () => act(data.pauseTimer) }, 'Pause')
+        : el('button', { className: 'btn btn-go', onclick: () => act(data.resumeTimer) }, 'Resume'),
+      el('button', { className: 'btn btn-stop', onclick: () => act(data.stopTimer) }, 'Stop'),
+    ),
   );
 }
 
@@ -205,8 +228,12 @@ function totals() {
 function byClientRows() {
   const weekMs = (id) => data.workedBetween(state, data.startOfWeek(), Infinity, id).ms;
   const clients = data.activeClients(state).sort((a, b) => weekMs(b.id) - weekMs(a.id));
+  const most = Math.max(1, ...clients.map((c) => weekMs(c.id)));
   return el('div', { className: 'rows' }, ...clients.map((c) =>
-    el('div', { className: 'row' },
+    el('div', {
+      className: 'row share',
+      style: `--c: ${data.CLIENT_COLORS[c.color]}; --share: ${(weekMs(c.id) / most) * 100}%`,
+    },
       dot(c.color),
       el('span', { className: 'grow' }, c.name),
       liveText(() => data.formatHours(weekMs(c.id)), { className: 'meta' }),
