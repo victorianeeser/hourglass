@@ -105,7 +105,10 @@ function bigClock() {
 function screen({ title, back, logo = false, links = [], body = [], footer = null }) {
   const header = el('div', { className: 'header' },
     back ? el('button', { className: 'back', ariaLabel: 'Back', onclick: back }, '←') : null,
-    logo ? el('img', { className: isRunning() ? 'logo flipping' : 'logo', src: LOGO_URL, alt: '' }) : null,
+    // Brand mark: the white hourglass on an ink tile, flipping while a timer runs
+    logo ? el('span', { className: 'brand-mark' },
+      el('img', { className: isRunning() ? 'logo flipping' : 'logo', src: LOGO_URL, alt: '' }),
+    ) : null,
     el('h1', { className: logo ? 'wordmark' : '' }, title),
     ...links,
   );
@@ -122,8 +125,8 @@ function screen({ title, back, logo = false, links = [], body = [], footer = nul
 function dashboardScreen() {
   const clients = data.activeClients(state);
   const links = [
-    el('button', { className: 'link', onclick: () => go('entries') }, 'Entries'),
-    el('button', { className: 'link', onclick: () => go('clients') }, 'Clients'),
+    el('button', { className: 'nav-link', onclick: () => go('entries') }, 'Entries'),
+    el('button', { className: 'nav-link', onclick: () => go('clients') }, 'Clients'),
   ];
 
   // First run: nothing to track yet
@@ -145,10 +148,15 @@ function dashboardScreen() {
     title: 'Hourglass',
     logo: true,
     links,
+    // Order matters: the thing you do (start or control a timer) first,
+    // then what it earned you, then where the week went.
     body: [
       timerCard(),
       totals(),
-      el('div', { className: 'label' }, 'By client · This week'),
+      el('div', { className: 'section-head' },
+        el('span', { className: 'label' }, 'By client'),
+        el('span', { className: 'label' }, 'This week'),
+      ),
       byClientRows(),
     ],
     footer: [
@@ -162,19 +170,34 @@ function timerCard() {
   const t = state.timer;
 
   if (!t) {
+    // Nothing running. The most likely next move is picking up the last job,
+    // so that's the big button; any other client is one chip away.
     const last = data.lastEntry(state);
     const lastClient = last && data.findClient(state, last.clientId);
-    // One tap to pick up where you left off (same client, task and note)
     const canContinue = lastClient && !lastClient.archived;
-    return el('div', { className: 'card' },
-      el('div', { className: 'label' }, 'No timer running'),
-      el('button', { className: 'btn btn-go btn-block', onclick: () => go('start') }, 'Start timer'),
-      el('div', { className: 'card-top' },
-        el('span', { className: 'small muted grow' }, last ? `Last: ${lastClient.name} · ${last.task}` : 'Last: No logs yet'),
-        canContinue ? el('button', {
-          className: 'link link-accent',
-          onclick: () => actThenClose(() => data.startTimer({ clientId: last.clientId, task: last.task, note: last.note })),
-        }, 'Continue →') : null,
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+    const main = canContinue
+      ? el('button', {
+        className: 'btn btn-go btn-block btn-continue',
+        onclick: () => actThenClose(() => data.startTimer({ clientId: last.clientId, task: last.task, note: last.note })),
+      },
+        el('span', { className: 'play' }),
+        el('span', { className: 'grow' }, el('strong', {}, 'Continue '), `${lastClient.name} · ${last.task}`),
+      )
+      : el('button', { className: 'btn btn-go btn-block', onclick: () => go('start') }, el('span', { className: 'play' }), 'Start timer');
+
+    return el('div', { className: 'card hero' },
+      el('div', { className: 'section-head' },
+        el('span', { className: 'label' }, 'Ready to track'),
+        el('span', { className: 'label' }, today),
+      ),
+      main,
+      el('div', { className: 'chips' },
+        ...data.clientsByRecent(state).slice(0, 4).map((c) =>
+          el('button', { className: 'chip client-chip', onclick: () => go('start', { clientId: c.id }) }, dot(c.color), c.name),
+        ),
+        el('button', { className: 'chip chip-ghost', onclick: () => go('start') }, '+ New timer'),
       ),
     );
   }
@@ -207,50 +230,70 @@ function timerCard() {
   );
 }
 
+// Money first (that's what this is for), hours underneath.
+// The week tile has a little Mon–Sun bar chart, today in ink.
 function totals() {
   const today = () => data.workedBetween(state, data.startOfToday(), Infinity);
   const week = () => data.workedBetween(state, data.startOfWeek(), Infinity);
+
+  const weekStart = data.startOfWeek();
+  const todayStart = data.startOfToday();
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const from = data.addDays(weekStart, i);
+    return { from, ms: data.workedBetween(state, from, data.addDays(from, 1)).ms };
+  });
+  const most = Math.max(1, ...days.map((d) => d.ms));
+  const bars = el('div', { className: 'week-bars', ariaHidden: 'true' }, ...days.map((d) =>
+    el('span', {
+      className: d.from === todayStart ? 'bar today' : d.from > todayStart ? 'bar future' : 'bar',
+      style: `--h: ${Math.max(8, (d.ms / most) * 100)}%`,
+    }),
+  ));
+
   return el('div', { className: 'totals' },
     el('div', { className: 'total' },
       el('span', { className: 'label' }, 'Today'),
-      liveText(() => data.formatHours(today().ms), { className: 'total-value' }),
+      liveText(() => data.formatMoney(today().amount), { className: 'total-value' }),
+      liveText(() => data.formatHours(today().ms), { className: 'total-sub' }),
     ),
     el('div', { className: 'total' },
-      el('span', { className: 'label' }, 'This week'),
-      liveText(() => {
-        const w = week();
-        return `${data.formatHours(w.ms)} · ${data.formatMoney(w.amount, 0)}`;
-      }, { className: 'total-value' }),
+      el('div', { className: 'section-head' }, el('span', { className: 'label' }, 'This week'), bars),
+      liveText(() => data.formatMoney(week().amount, 0), { className: 'total-value' }),
+      liveText(() => data.formatHours(week().ms), { className: 'total-sub' }),
     ),
   );
 }
 
 function byClientRows() {
-  const weekMs = (id) => data.workedBetween(state, data.startOfWeek(), Infinity, id).ms;
-  const clients = data.activeClients(state).sort((a, b) => weekMs(b.id) - weekMs(a.id));
-  const most = Math.max(1, ...clients.map((c) => weekMs(c.id)));
+  const weekOf = (id) => data.workedBetween(state, data.startOfWeek(), Infinity, id);
+  const clients = data.activeClients(state).sort((a, b) => weekOf(b.id).ms - weekOf(a.id).ms);
+  const most = Math.max(1, ...clients.map((c) => weekOf(c.id).ms));
   return el('div', { className: 'rows' }, ...clients.map((c) =>
     el('div', {
       className: 'row share',
-      style: `--c: ${data.CLIENT_COLORS[c.color]}; --share: ${(weekMs(c.id) / most) * 100}%`,
+      style: `--c: ${data.CLIENT_COLORS[c.color]}; --share: ${(weekOf(c.id).ms / most) * 100}%`,
     },
       dot(c.color),
       el('span', { className: 'grow' }, c.name),
-      liveText(() => data.formatHours(weekMs(c.id)), { className: 'meta' }),
+      liveText(() => data.formatMoney(weekOf(c.id).amount, 0), { className: 'meta money' }),
+      liveText(() => data.formatHours(weekOf(c.id).ms), { className: 'meta hours' }),
     ),
   ));
 }
 
 // ---------- Start timer ----------
 
-function startScreen() {
+// Opened from a client chip on the dashboard, `clientId` comes preselected.
+function startScreen({ clientId: chosen } = {}) {
   const clients = data.activeClients(state);
-  const last = data.lastEntry(state);
-  let clientId = clients.some((c) => c.id === state.lastClientId) ? state.lastClientId : clients[0].id;
-  let task = last ? last.task : data.TASKS[0];
+  const valid = (id) => clients.some((c) => c.id === id);
+  let clientId = valid(chosen) ? chosen : valid(state.lastClientId) ? state.lastClientId : clients[0].id;
+  // Preselect the task you last did for this client (or anyone, if they're new)
+  const last = data.lastEntryFor(state, clientId) || data.lastEntry(state);
+  let task = last && data.TASKS.includes(last.task) ? last.task : data.TASKS[0];
 
   const clientRows = el('div', { className: 'rows' });
-  const chips = el('div', { className: 'chips' });
+  const chips = el('div', { className: 'task-groups' });
   const noteInput = el('input', { className: 'input', placeholder: 'e.g. Homepage revisions', maxLength: 200 });
 
   // Redraw the client list and task chips to show what's picked.
@@ -264,13 +307,18 @@ function startScreen() {
         c.id === clientId ? dot(c.color) : null,
       ),
     ));
-    chips.replaceChildren(...data.TASKS.map((name) =>
-      el('button', {
-        className: 'chip',
-        ariaPressed: String(name === task),
-        style: `--chip-color: ${color}`,
-        onclick: () => { task = name; update(); },
-      }, name),
+    chips.replaceChildren(...data.TASK_GROUPS.map(([group, tasks]) =>
+      el('div', { className: 'task-group' },
+        el('span', { className: 'group-name' }, group),
+        el('div', { className: 'chips' }, ...tasks.map((name) =>
+          el('button', {
+            className: 'chip',
+            ariaPressed: String(name === task),
+            style: `--chip-color: ${color}`,
+            onclick: () => { task = name; update(); },
+          }, name),
+        )),
+      ),
     ));
   }
   update();
@@ -466,8 +514,14 @@ function entryForm(entry) {
   if (!entry) clientOptions.unshift(['', 'Choose client']);
   const clientSel = select(clientOptions, entry ? entry.clientId : '');
 
-  const tasks = data.TASKS.includes(entry && entry.task) || !entry ? data.TASKS : [...data.TASKS, entry.task];
-  const taskSel = select(tasks.map((t) => [t, t]), entry ? entry.task : 'Other');
+  // Task dropdown in the same groups as the Start timer chips
+  const selectedTask = entry ? entry.task : 'Other';
+  const taskSel = el('select', { className: 'input' }, ...data.TASK_GROUPS.map(([group, tasks]) =>
+    el('optgroup', { label: group }, ...tasks.map((t) => el('option', { value: t, selected: t === selectedTask }, t))),
+  ));
+  if (!data.TASKS.includes(selectedTask)) {
+    taskSel.append(el('option', { value: selectedTask, selected: true }, selectedTask)); // an old tag no longer in the list
+  }
 
   // Past time defaults to the hour that just ended, on the quarter hour
   const now = Date.now();

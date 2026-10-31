@@ -106,7 +106,30 @@ button { cursor: pointer; }
   color: var(--muted);
 }
 .link:hover { color: var(--mocha); }
-.link-accent { color: var(--mocha); font-size: 12px; font-weight: 600; }
+
+.nav-link {
+  border: 0;
+  background: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-weight: 500;
+  transition: background-color 120ms, color 120ms;
+}
+.nav-link:hover { background: var(--sand); color: var(--ink); }
+.nav-link:last-child { margin-right: -8px; }
+
+/* The brand mark: white hourglass on a small ink tile */
+.brand-mark {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--ink);
+}
+.brand-mark .logo { height: 13px; filter: invert(1); }
 
 .logo { height: 16px; width: auto; flex: none; }
 
@@ -123,10 +146,12 @@ button { cursor: pointer; }
 
 /* ---------- Text helpers ---------- */
 
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
 .label {
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -146,9 +171,23 @@ button { cursor: pointer; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   white-space: nowrap;
 }
 .btn { transition: filter 120ms, transform 120ms, background-color 120ms; }
+
+/* "▶ Continue Bloom Florals · Figma" */
+.btn-continue { justify-content: flex-start; font-weight: 500; }
+.btn-continue strong { font-weight: 700; }
+.btn-continue .grow { text-align: left; }
+.play {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 8px solid currentColor;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
 .btn:hover { filter: brightness(0.95); }
 .btn:active { transform: scale(0.98); }
 .btn-block { width: 100%; }
@@ -165,7 +204,7 @@ button { cursor: pointer; }
 
 .card {
   background: var(--sand);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -185,8 +224,19 @@ button { cursor: pointer; }
 }
 .clock .seconds { opacity: 0.45; } /* hours:minutes lead, seconds just tick along */
 
+/* Nothing running: a bright paper card that invites you to start */
+.card.hero {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 20px -14px rgba(22, 20, 18, 0.35);
+}
+
 /* Running: the card goes dark, like the pill on webpages */
-.card.live { background: var(--ink); color: var(--on-ink); }
+.card.live {
+  background: var(--ink);
+  color: var(--on-ink);
+  box-shadow: 0 12px 24px -14px rgba(22, 20, 18, 0.7);
+}
 .card.live .tag { background: transparent; border-color: rgba(255, 255, 255, 0.24); color: var(--on-ink); }
 .card.live .small.muted { color: rgba(255, 255, 255, 0.6); }
 .card.live .btn-outline { background: transparent; border-color: rgba(255, 255, 255, 0.3); color: var(--on-ink); }
@@ -259,6 +309,16 @@ button.row:hover { background: var(--sand); padding: 0 6px; border-radius: 6px; 
   color: var(--on-ink);
 }
 
+/* Quick-start chips on the dashboard: a client's dot and name */
+.client-chip { gap: 6px; padding: 0 10px; }
+.client-chip .dot { width: 7px; height: 7px; }
+.chip-ghost { border-style: dashed; color: var(--muted); }
+
+/* Task chips in their groups (Design / Clients & admin) */
+.task-groups { display: flex; flex-direction: column; gap: 10px; }
+.task-group { display: flex; flex-direction: column; gap: 6px; }
+.group-name { font-size: 11px; color: var(--muted); }
+
 /* ---------- Forms ---------- */
 
 .field { display: flex; flex-direction: column; gap: 4px; }
@@ -305,9 +365,19 @@ select.input {
 .totals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: none; }
 .total {
   display: flex; flex-direction: column; gap: 2px;
-  padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper);
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper);
 }
-.total-value { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.total-value { font-size: 20px; font-weight: 650; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.total-sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Mon–Sun mini chart in the This week tile */
+.week-bars { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
+.bar { width: 5px; height: var(--h); border-radius: 1.5px; background: #CFC6B8; }
+.bar.today { background: var(--ink); }
+.bar.future { opacity: 0.4; }
+
+.row .meta.money { color: var(--ink); font-weight: 500; }
+.row .meta.hours { width: 56px; text-align: right; }
 
 .empty {
   margin: auto;

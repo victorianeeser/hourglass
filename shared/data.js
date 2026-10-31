@@ -17,7 +17,14 @@
 // `carriedMs` remembers the earlier stretches so the clock can show the
 // whole session (e.g. 0:40 before a pause + 0:05 after = 0:45).
 
-export const TASKS = ['Figma', 'Canva', 'Squarespace', 'Email', 'Call', 'Other'];
+// Task tags, grouped so the list reads in order: making the work, then talking
+// to the client, then getting paid. "Invoice" is just a tag for time spent
+// invoicing; Hourglass itself still stops at the CSV.
+export const TASK_GROUPS = [
+  ['Design', ['Figma', 'Illustrator', 'Photoshop', 'Canva', 'Squarespace', 'Other']],
+  ['Clients & admin', ['Email', 'Call', 'Invoice']],
+];
+export const TASKS = TASK_GROUPS.flatMap(([, tasks]) => tasks);
 
 // Client palette (same values as the CSS variables in CLAUDE.md)
 export const CLIENT_COLORS = {
@@ -221,6 +228,17 @@ export function startOfWeek(now = Date.now()) {
 // The most recently finished entry, or undefined
 export function lastEntry(state) {
   return state.entries.reduce((latest, e) => (!latest || e.end > latest.end ? e : latest), undefined);
+}
+
+// The most recent entry for one client, or undefined
+export function lastEntryFor(state, clientId) {
+  return lastEntry({ entries: state.entries.filter((e) => e.clientId === clientId) });
+}
+
+// Clients you've worked for most recently come first; ones never used keep their order
+export function clientsByRecent(state) {
+  const lastUsed = (c) => (lastEntryFor(state, c.id) || { end: 0 }).end;
+  return activeClients(state).sort((a, b) => lastUsed(b) - lastUsed(a));
 }
 
 // 2520000 → "0h 42m"
