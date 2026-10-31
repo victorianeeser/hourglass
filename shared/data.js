@@ -392,6 +392,77 @@ export function dateRange(name, now = Date.now()) {
   }
 }
 
+// ---------- Stats ----------
+
+// Every piece of work overlapping [from, to), trimmed to fit it,
+// including the stretch that is running right now.
+export function piecesBetween(state, from, to, now = Date.now()) {
+  const pieces = [];
+  const add = (start, end, rate, clientId, task) => {
+    const s = Math.max(start, from);
+    const e = Math.min(end, to);
+    if (e <= s) return;
+    pieces.push({ clientId, task, start: s, ms: e - s, amount: ((e - s) / 3600000) * rate });
+  };
+  for (const e of state.entries) add(e.start, e.end, e.rate, e.clientId, e.task);
+  const t = state.timer;
+  if (t && t.status === 'running') {
+    const client = findClient(state, t.clientId);
+    add(t.start, now, client ? client.rate : 0, t.clientId, t.task);
+  }
+  return pieces;
+}
+
+export function sumPieces(pieces) {
+  return pieces.reduce((sum, p) => ({ ms: sum.ms + p.ms, amount: sum.amount + p.amount }), { ms: 0, amount: 0 });
+}
+
+// Totals per client, task, or day: groupPieces(pieces, (p) => p.task) → [{ key, ms, amount }], biggest first
+export function groupPieces(pieces, keyOf) {
+  const groups = new Map();
+  for (const p of pieces) {
+    const key = keyOf(p);
+    const g = groups.get(key) || { key, ms: 0, amount: 0 };
+    g.ms += p.ms;
+    g.amount += p.amount;
+    groups.set(key, g);
+  }
+  return [...groups.values()].sort((a, b) => b.amount - a.amount || b.ms - a.ms);
+}
+
+// A week, month or year (offset 0 = the current one, -1 = the one before)
+// split into bars: days for a week or month, months for a year.
+export function statsPeriod(kind, offset = 0, now = Date.now()) {
+  const short = (ts, opts) => new Date(ts).toLocaleDateString('en-US', opts);
+  if (kind === 'year') {
+    const year = new Date(now).getFullYear() + offset;
+    const from = new Date(year, 0, 1).getTime();
+    const buckets = Array.from({ length: 12 }, (_, i) => {
+      const start = new Date(year, i, 1).getTime();
+      return { from: start, to: new Date(year, i + 1, 1).getTime(), axis: 'JFMAMJJASOND'[i], name: short(start, { month: 'long', year: 'numeric' }) };
+    });
+    return { from, to: new Date(year + 1, 0, 1).getTime(), label: String(year), buckets };
+  }
+  if (kind === 'month') {
+    const from = addMonths(startOfMonth(now), offset);
+    const to = addMonths(from, 1);
+    const buckets = [];
+    for (let day = from; day < to; day = addDays(day, 1)) {
+      const date = new Date(day).getDate();
+      buckets.push({ from: day, to: addDays(day, 1), axis: [1, 8, 15, 22, 29].includes(date) ? String(date) : '', name: short(day, { weekday: 'short', month: 'short', day: 'numeric' }) });
+    }
+    return { from, to, label: short(from, { month: 'long', year: 'numeric' }), buckets };
+  }
+  const from = addDays(startOfWeek(now), 7 * offset);
+  const to = addDays(from, 7);
+  const buckets = Array.from({ length: 7 }, (_, i) => {
+    const day = addDays(from, i);
+    return { from: day, to: addDays(day, 1), axis: 'MTWTFSS'[i], name: short(day, { weekday: 'short', month: 'short', day: 'numeric' }) };
+  });
+  const last = addDays(to, -1);
+  return { from, to, label: `${short(from, { month: 'short', day: 'numeric' })} – ${short(last, { month: 'short', day: 'numeric' })}`, buckets };
+}
+
 // Values for <input type="date"> ("2026-10-27") and <input type="time"> ("14:05")
 const pad = (n) => String(n).padStart(2, '0');
 

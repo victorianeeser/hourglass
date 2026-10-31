@@ -13,7 +13,7 @@ let liveTexts = []; // bits of text (clock, totals) refreshed every second
 
 // Screens that only show data redraw when storage changes.
 // Form screens don't, so whatever you're typing isn't wiped out.
-const LIVE_SCREENS = new Set(['dashboard', 'clients', 'switch', 'entries']);
+const LIVE_SCREENS = new Set(['dashboard', 'clients', 'switch', 'entries', 'stats']);
 
 let entriesRange = 'week'; // the Entries filter, remembered while the popup is open
 
@@ -126,6 +126,7 @@ function dashboardScreen() {
   const clients = data.activeClients(state);
   const links = [
     el('button', { className: 'nav-link', onclick: () => go('entries') }, 'Entries'),
+    el('button', { className: 'nav-link', onclick: () => go('stats') }, 'Stats'),
     el('button', { className: 'nav-link', onclick: () => go('clients') }, 'Clients'),
   ];
 
@@ -250,14 +251,17 @@ function totals() {
     }),
   ));
 
+  // Both tiles open Stats for this week
+  const openStats = () => { statsKind = 'week'; statsOffset = 0; go('stats'); };
   return el('div', { className: 'totals' },
-    el('div', { className: 'total' },
+    el('button', { className: 'total', onclick: openStats, title: 'See stats' },
       el('span', { className: 'label' }, 'Today'),
       liveText(() => data.formatMoney(today().amount), { className: 'total-value' }),
       liveText(() => data.formatHours(today().ms), { className: 'total-sub' }),
     ),
-    el('div', { className: 'total' },
-      el('div', { className: 'section-head' }, el('span', { className: 'label' }, 'This week'), bars),
+    el('button', { className: 'total', onclick: openStats, title: 'See stats' },
+      el('span', { className: 'label' }, 'This week'),
+      bars, // pinned to the corner so both tiles line up
       liveText(() => data.formatMoney(week().amount, 0), { className: 'total-value' }),
       liveText(() => data.formatHours(week().ms), { className: 'total-sub' }),
     ),
@@ -718,6 +722,150 @@ function pastScreen({ from = 'dashboard', day = null }) {
   });
 }
 
+// ---------- Stats ----------
+
+let statsKind = 'week'; // 'week' | 'month' | 'year'
+let statsOffset = 0; // 0 = current period, -1 = the one before, ...
+
+function statsScreen() {
+  const now = Date.now();
+  const period = data.statsPeriod(statsKind, statsOffset, now);
+  const pieces = data.piecesBetween(state, period.from, period.to, now);
+  const total = data.sumPieces(pieces);
+  const noun = { week: 'week', month: 'month', year: 'year' }[statsKind];
+
+  // Compare with the period before. For the current period, only up to the
+  // same point (Mon–Wed vs last Mon–Wed), so a half-finished week isn't unfair.
+  const prev = data.statsPeriod(statsKind, statsOffset - 1, now);
+  const prevTo = statsOffset === 0 ? prev.from + (now - period.from) : prev.to;
+  const prevTotal = data.sumPieces(data.piecesBetween(state, prev.from, Math.min(prevTo, prev.to), now));
+  let compare = '';
+  if (prevTotal.amount > 0) {
+    const change = Math.round(((total.amount - prevTotal.amount) / prevTotal.amount) * 100);
+    const when = statsOffset === 0 ? `same time last ${noun}` : `previous ${noun}`;
+    compare = `${change >= 0 ? '▲' : '▼'} ${Math.abs(change)}% vs ${when}`;
+  }
+
+  const hours = total.ms / 3600000;
+  const avgRate = hours > 0 ? total.amount / hours : 0;
+  const days = data.groupPieces(pieces, (p) => data.startOfToday(p.start));
+  const busiest = [...days].sort((a, b) => b.ms - a.ms)[0];
+
+  const changePeriod = (step) => { statsOffset += step; render(); };
+
+  return screen({
+    title: 'Stats',
+    back: () => go('dashboard'),
+    body: [
+      el('div', { className: 'chips' }, ...['week', 'month', 'year'].map((kind) =>
+        el('button', {
+          className: 'chip',
+          ariaPressed: String(kind === statsKind),
+          onclick: () => { statsKind = kind; statsOffset = 0; render(); },
+        }, kind[0].toUpperCase() + kind.slice(1)),
+      )),
+      el('div', { className: 'cal-nav' },
+        el('div', { className: 'cal-title' }, el('strong', {}, period.label)),
+        el('button', { className: 'cal-arrow', ariaLabel: `Previous ${noun}`, onclick: () => changePeriod(-1) }, '‹'),
+        el('button', { className: 'cal-arrow', ariaLabel: `Next ${noun}`, disabled: statsOffset >= 0, onclick: () => changePeriod(1) }, '›'),
+      ),
+      // Headline number
+      el('div', { className: 'stat-hero' },
+        el('div', { className: 'stat-total' }, data.formatMoney(total.amount)),
+        el('div', { className: 'small muted' }, `${data.formatHours(total.ms)} billed${compare ? ' · ' + compare : ''}`),
+      ),
+      barChart(period, pieces, now),
+      el('div', { className: 'mini-stats' },
+        miniStat('Avg rate', avgRate ? data.formatRate(Math.round(avgRate)) : '—'),
+        miniStat('Days worked', String(days.length)),
+        miniStat('Busiest day', busiest ? `${new Date(busiest.key).toLocaleDateString('en-US', { weekday: 'short' })} ${new Date(busiest.key).getDate()}` : '—',
+          busiest ? data.formatHours(busiest.ms) : ''),
+      ),
+      pieces.length === 0 ? el('p', { className: 'small muted' }, `No time logged this ${noun}.`) : null,
+      ...breakdown('By client', data.groupPieces(pieces, (p) => p.clientId), total, 'amount', (g) => {
+        const client = data.findClient(state, g.key);
+        return { name: client.name, color: data.CLIENT_COLORS[client.color], value: data.formatMoney(g.amount, 0) };
+      }),
+      ...breakdown('By task', data.groupPieces(pieces, (p) => p.task).sort((a, b) => b.ms - a.ms), total, 'ms', (g) => (
+        { name: g.key, color: null, value: data.formatHours(g.ms) }
+      )),
+    ],
+  });
+}
+
+function miniStat(label, value, sub = '') {
+  return el('div', { className: 'mini' },
+    el('span', { className: 'label' }, label),
+    el('strong', {}, value),
+    sub ? el('span', { className: 'small muted' }, sub) : null,
+  );
+}
+
+// Money per day (or per month for a year). One series, so no legend:
+// the current day/month is ink, the rest mocha. Hover or focus a bar for its numbers.
+function barChart(period, pieces, now) {
+  const values = period.buckets.map((b) => {
+    const inBucket = pieces.filter((p) => p.start >= b.from && p.start < b.to);
+    return { ...b, ...data.sumPieces(inBucket) };
+  });
+  const most = Math.max(1, ...values.map((v) => v.amount));
+  const tip = el('div', { className: 'chart-tip', hidden: true });
+  const chart = el('div', { className: 'chart' });
+
+  const showTip = (col, v) => {
+    tip.replaceChildren(el('strong', {}, v.name), el('span', {}, `${data.formatHours(v.ms)} · ${data.formatMoney(v.amount)}`));
+    tip.hidden = false;
+    // Center over the bar, but keep it inside the chart
+    const center = col.offsetLeft + col.offsetWidth / 2;
+    const left = Math.min(Math.max(center - tip.offsetWidth / 2, 0), chart.offsetWidth - tip.offsetWidth);
+    tip.style.left = `${left}px`;
+  };
+
+  const bars = el('div', { className: 'chart-bars' }, ...values.map((v) => {
+    const current = now >= v.from && now < v.to;
+    const col = el('button', {
+      className: ['chart-col', current ? 'current' : '', v.from > now ? 'future' : ''].join(' ').trim(),
+      ariaLabel: `${v.name}: ${data.formatHours(v.ms)}, ${data.formatMoney(v.amount)}`,
+    }, el('span', { className: 'chart-fill', style: `height: ${v.amount ? Math.max(3, (v.amount / most) * 100) : 0}%` }));
+    col.addEventListener('mouseenter', () => showTip(col, v));
+    col.addEventListener('focus', () => showTip(col, v));
+    col.addEventListener('mouseleave', () => { tip.hidden = true; });
+    col.addEventListener('blur', () => { tip.hidden = true; });
+    return col;
+  }));
+
+  chart.append(
+    tip,
+    bars,
+    el('div', { className: 'chart-axis' }, ...values.map((v) => el('span', {}, v.axis))),
+  );
+  return chart;
+}
+
+// "By client" / "By task": name, a bar for its share, its value and %.
+// Names always sit next to the bars, so nothing depends on color alone.
+// `measure` is what the bar and % compare: 'amount' ($) or 'ms' (time).
+function breakdown(title, groups, total, measure, describe) {
+  if (groups.length === 0) return [];
+  const most = Math.max(...groups.map((g) => g[measure])) || 1;
+  return [
+    el('div', { className: 'label' }, title),
+    el('div', { className: 'rows' }, ...groups.map((g) => {
+      const { name, color, value } = describe(g);
+      const share = total[measure] ? Math.round((g[measure] / total[measure]) * 100) : 0;
+      return el('div', { className: 'stat-row' },
+        color ? el('span', { className: 'dot', style: `background: ${color}` }) : el('span'),
+        el('span', { className: 'grow' }, name),
+        el('span', { className: 'stat-bar' },
+          el('span', { style: `width: ${(g[measure] / most) * 100}%; background: ${color || 'var(--mocha)'}` }),
+        ),
+        el('span', { className: 'meta money' }, value),
+        el('span', { className: 'meta share' }, `${share}%`),
+      );
+    })),
+  ];
+}
+
 // ---------- Export CSV ----------
 
 function exportScreen() {
@@ -806,6 +954,7 @@ const screens = {
   entry: entryScreen,
   past: pastScreen,
   export: exportScreen,
+  stats: statsScreen,
 };
 
 // ---------- Start up ----------

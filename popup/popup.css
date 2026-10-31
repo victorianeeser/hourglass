@@ -364,9 +364,16 @@ select.input {
 
 .totals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: none; }
 .total {
-  display: flex; flex-direction: column; gap: 2px;
+  position: relative;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
   padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper);
+  text-align: left;
+  transition: border-color 120ms, box-shadow 120ms, transform 120ms;
 }
+/* The tiles open Stats */
+.total:hover { border-color: var(--muted); box-shadow: 0 6px 14px -10px rgba(22, 20, 18, 0.4); }
+.total:active { transform: scale(0.99); }
+.total .week-bars { position: absolute; top: 10px; right: 12px; }
 .total-value { font-size: 20px; font-weight: 650; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .total-sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
@@ -429,6 +436,56 @@ select.input {
 .day-dots .dot { width: 5px; height: 5px; box-shadow: 0 0 0 1px var(--paper); }
 
 .day-detail { display: flex; flex-direction: column; gap: 6px; }
+
+/* ---------- Stats ---------- */
+
+.stat-hero { display: flex; flex-direction: column; gap: 2px; flex: none; }
+.stat-total { font-size: 32px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+
+.chart { position: relative; flex: none; padding-top: 4px; }
+.chart-bars {
+  display: flex; align-items: stretch; gap: 2px;
+  height: 96px;
+  border-bottom: 1px solid var(--line); /* baseline */
+}
+/* Each column is a full-height hit target; the visible bar sits at the bottom */
+.chart-col {
+  flex: 1; min-width: 0; padding: 0; border: 0; background: none;
+  display: flex; align-items: flex-end;
+}
+.chart-fill { width: 100%; border-radius: 4px 4px 0 0; background: var(--mocha); opacity: 0.55; transition: opacity 100ms; }
+.chart-col.current .chart-fill { background: var(--ink); opacity: 1; }
+.chart-col:hover .chart-fill, .chart-col:focus-visible .chart-fill { opacity: 1; }
+.chart-col:focus-visible { outline-offset: 0; }
+.chart-axis { display: flex; gap: 2px; margin-top: 4px; }
+.chart-axis span { flex: 1; min-width: 0; text-align: center; font-size: 10px; color: var(--muted); overflow: visible; white-space: nowrap; }
+.chart-tip {
+  position: absolute; top: -34px; z-index: 1;
+  display: flex; flex-direction: column;
+  padding: 5px 8px; border-radius: 6px;
+  background: var(--ink); color: var(--on-ink);
+  font-size: 11px; line-height: 1.3; white-space: nowrap; pointer-events: none;
+}
+.chart-tip[hidden] { display: none; }
+.chart-tip span { opacity: 0.75; font-variant-numeric: tabular-nums; }
+
+.mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; flex: none; }
+.mini {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper);
+}
+.mini strong { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+
+.stat-row {
+  height: 36px;
+  display: grid; grid-template-columns: 8px minmax(0, 1fr) 64px 48px 32px; align-items: center; gap: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.stat-bar { height: 6px; border-radius: 3px; background: var(--sand); overflow: hidden; }
+.stat-bar span { display: block; height: 100%; border-radius: 3px; }
+.stat-row .meta { text-align: right; font-variant-numeric: tabular-nums; }
+.stat-row .meta.money { color: var(--ink); font-weight: 500; }
+.stat-row .meta.share { color: var(--muted); font-size: 12px; }
 
 /* Anyone who has asked their computer for less motion gets a still popup */
 @media (prefers-reduced-motion: reduce) {
