@@ -1,5 +1,7 @@
 /* popup/popup.css
-   Styles for the toolbar popup, following the Low-fi page in Figma.
+   Styles for the toolbar popup. One small design system:
+   tokens → layout (header / body / action bar) → type → buttons →
+   surfaces (cards, lists) → controls → each screen's extras.
    Sizes follow CLAUDE.md: 360 × 520, 12px padding, 4px grid,
    32px buttons/inputs with 6px radius, 36px list rows. */
 
@@ -36,6 +38,16 @@
   --client-cobalt: #2E4FBF;
   --client-violet: #9446D6;
   --client-peony: #EE6FA5;
+
+  /* derived, used by the components below */
+  --hover: #F3EFE8;            /* row and button hover, between cream and sand */
+  --divider: #EEE9E1;          /* lines inside cards, lighter than --line */
+  --line-strong: #CFC6B8;      /* hovered borders */
+  --faint: #B3AA9E;            /* chevrons, placeholder-ish marks */
+  --paused-text: #A3650F;      /* --idle darkened so it reads as text */
+  --radius: 10px;
+  --shadow-sm: 0 1px 2px rgba(22, 20, 18, 0.05);
+  --shadow-md: 0 10px 24px -12px rgba(22, 20, 18, 0.45);
 }
 
 * { box-sizing: border-box; }
@@ -46,83 +58,91 @@ body {
   width: 360px;
   height: 520px;
   overflow: hidden;
-  background: var(--cream); /* warm "sand" base instead of plain white */
+  background: var(--cream);
   color: var(--ink);
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
   line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
 }
 
-button, input { font: inherit; color: inherit; }
+button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--mocha); outline-offset: 2px; }
+.icon { display: block; flex: none; }
 
-/* ---------- Screen layout: header, scrolling body, footer pinned to the bottom ---------- */
+/* ---------- Layout: header bar, scrolling body, action bar ---------- */
 
-.screen {
-  height: 520px;
-  padding: 12px;
+.screen { height: 520px; display: flex; flex-direction: column; }
+
+.header {
+  flex: none;
+  height: 48px;
+  padding: 0 12px;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
 }
-
-/* New screens ease in instead of snapping */
-.screen.enter { animation: screen-in 180ms ease-out; }
-@keyframes screen-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
+.header h1 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.header h1.wordmark { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+.header .icon-btn:first-child { margin-left: -6px; }
 
 .screen-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
+
+/* The content eases in; the header and action bar stay put */
+.screen.enter .screen-body { animation: body-in 180ms ease-out; }
+@keyframes body-in {
+  from { opacity: 0.4; transform: translateY(4px); } /* never fully invisible, even if an animation stalls */
+  to { opacity: 1; transform: none; }
+}
+
+.screen-footer {
+  flex: none;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+}
+.spacer { flex: 1; }
 
 .stack { display: flex; flex-direction: column; gap: 12px; }
 
-.screen-footer { display: flex; align-items: center; gap: 8px; }
-.screen-footer .spacer { flex: 1; }
-
-.header { display: flex; align-items: center; gap: 8px; min-height: 20px; }
-.header h1 { flex: 1; margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.header h1.wordmark { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
-
-.back {
-  border: 0;
-  background: none;
-  padding: 0 2px;
-  font-size: 16px;
-  line-height: 1;
+.message {
+  flex: none;
+  margin: 0;
+  padding: 8px 12px;
+  background: #FBEAE5;
+  border-bottom: 1px solid #F3CFC4;
+  color: #A3341C;
+  font-size: 12px;
 }
+.message:empty { display: none; }
 
-.link {
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--muted);
-}
-.link:hover { color: var(--mocha); }
+/* ---------- Header pieces ---------- */
 
-.nav-link {
-  border: 0;
-  background: none;
-  padding: 4px 8px;
-  border-radius: 6px;
-  color: var(--muted);
-  font-weight: 500;
-  transition: background-color 120ms, color 120ms;
-}
-.nav-link:hover { background: var(--sand); color: var(--ink); }
-.nav-link:last-child { margin-right: -8px; }
-
-/* The brand mark: white hourglass on a small ink tile */
 .brand-mark {
   width: 24px;
   height: 24px;
@@ -132,9 +152,7 @@ button { cursor: pointer; }
   border-radius: 7px;
   background: var(--ink);
 }
-.brand-mark .logo { height: 13px; filter: invert(1); }
-
-.logo { height: 16px; width: auto; flex: none; }
+.brand-mark .logo { height: 13px; width: auto; filter: invert(1); }
 
 /* While a timer runs, the hourglass flips every 15 seconds, like real sand running out.
    It's symmetrical, so jumping back from 180° to 0° is invisible. */
@@ -144,12 +162,39 @@ button { cursor: pointer; }
   100% { transform: rotate(180deg); }
 }
 
-.message { margin: 0; color: var(--delete); font-size: 12px; }
-.message:empty { display: none; }
+.nav { display: flex; gap: 2px; margin-right: -6px; }
+.nav-link {
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-weight: 500;
+  transition: background-color 120ms, color 120ms;
+}
+.nav-link:hover { background: var(--sand); color: var(--ink); }
 
-/* ---------- Text helpers ---------- */
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  transition: background-color 120ms, border-color 120ms;
+}
+.icon-btn:hover { background: var(--sand); }
+.icon-btn.bordered { border-color: var(--line); background: var(--paper); box-shadow: var(--shadow-sm); }
+.icon-btn.bordered:hover { background: var(--hover); border-color: var(--line-strong); }
+.icon-btn:disabled { opacity: 0.35; cursor: default; background: transparent; }
+.icon-btn.bordered:disabled { background: var(--paper); border-color: var(--line); }
 
-.section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* ---------- Type ---------- */
 
 .label {
   font-size: 10px;
@@ -158,9 +203,10 @@ button { cursor: pointer; }
   text-transform: uppercase;
   color: var(--muted);
 }
-
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 2px; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; margin: 0; }
+.num { font-variant-numeric: tabular-nums; }
 .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- Buttons ---------- */
@@ -170,163 +216,178 @@ button { cursor: pointer; }
   padding: 0 12px;
   border: 1px solid transparent;
   border-radius: 6px;
-  font-weight: 600;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
+  font-weight: 600;
   white-space: nowrap;
+  transition: background-color 120ms, border-color 120ms, transform 120ms;
 }
-.btn { transition: filter 120ms, transform 120ms, background-color 120ms; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: default; transform: none; }
+.btn-block { width: 100%; }
+.btn-half { flex: 1; }
+.btn-sm { height: 28px; padding: 0 10px; font-size: 12px; }
+
+/* Primary: ink. Its play icon is the one place green appears on a button,
+   because green means "the clock is running". */
+.btn-primary { background: var(--ink); color: var(--on-ink); box-shadow: 0 1px 2px rgba(22, 20, 18, 0.25); }
+.btn-primary:hover:not(:disabled) { background: #2C2925; }
+.icon.go { color: var(--running); }
+
+.btn-secondary { background: var(--paper); border-color: var(--line); color: var(--ink); box-shadow: var(--shadow-sm); }
+.btn-secondary:hover:not(:disabled) { background: var(--hover); border-color: var(--line-strong); }
+
+.btn-danger { background: none; color: var(--delete); padding: 0 10px; }
+.btn-danger:hover { background: #FBEAE5; }
 
 /* "▶ Continue Bloom Florals · Figma" */
 .btn-continue { justify-content: flex-start; font-weight: 500; }
 .btn-continue strong { font-weight: 700; }
 .btn-continue .grow { text-align: left; }
-.play {
-  flex: none;
-  width: 0;
-  height: 0;
-  border-left: 8px solid currentColor;
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
-}
-.btn:hover { filter: brightness(0.95); }
-.btn:active { transform: scale(0.98); }
-.btn-block { width: 100%; }
-.btn-half { flex: 1; }
-.btn-pill { border-radius: 999px; font-size: 12px; }
+.btn-continue .icon:last-child { opacity: 0.5; }
 
-.btn-go { background: var(--running); color: var(--on-ink); }    /* start, resume, save */
-.btn-pause { background: var(--idle); color: var(--on-ink); }
-.btn-stop { background: var(--delete); color: var(--on-ink); }
-.btn-outline { background: var(--paper); border-color: var(--line); color: var(--ink); }
-.btn-delete-text { background: none; color: var(--delete); padding: 0 8px; }
-
-/* ---------- Cards, rows, chips, dots ---------- */
+/* ---------- Surfaces ---------- */
 
 .card {
-  background: var(--sand);
-  border-radius: 12px;
+  flex: none;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: none;
-}
-
-.card-top, .card-clock { display: flex; align-items: center; gap: 8px; }
-.card-top strong { font-weight: 600; font-size: 14px; }
-
-.clock {
-  flex: 1;
-  font-size: 30px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-.clock .seconds { opacity: 0.45; } /* hours:minutes lead, seconds just tick along */
-
-/* Nothing running: a bright paper card that invites you to start */
-.card.hero {
   background: var(--paper);
   border: 1px solid var(--line);
-  box-shadow: 0 8px 20px -14px rgba(22, 20, 18, 0.35);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
 }
 
-/* Running: the card goes dark, like the pill on webpages */
-.card.live {
-  background: var(--ink);
-  color: var(--on-ink);
-  box-shadow: 0 12px 24px -14px rgba(22, 20, 18, 0.7);
+/* Grouped list: rows inside one white card, like a settings screen */
+.list {
+  flex: none;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
-.card.live .tag { background: transparent; border-color: rgba(255, 255, 255, 0.24); color: var(--on-ink); }
-.card.live .small.muted { color: rgba(255, 255, 255, 0.6); }
-.card.live .btn-outline { background: transparent; border-color: rgba(255, 255, 255, 0.3); color: var(--on-ink); }
-.card.live .btn-outline:hover { background: rgba(255, 255, 255, 0.08); filter: none; }
-
-/* Paused: back to sand, with an amber edge for "needs attention" */
-.card.paused { box-shadow: inset 3px 0 0 var(--idle); }
-.card.paused .clock { color: var(--muted); }
-
-.status { display: flex; align-items: center; gap: 6px; }
-.status.running { color: var(--running); }
-.status.paused { color: #B97A1C; } /* --idle darkened enough to read on sand */
-
-/* A green dot that breathes while time is being billed */
-.live-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--running);
-  animation: breathe 2s ease-out infinite;
-}
-@keyframes breathe {
-  0% { box-shadow: 0 0 0 0 rgba(61, 190, 107, 0.6); }
-  100% { box-shadow: 0 0 0 6px rgba(61, 190, 107, 0); }
-}
-.pause-mark { width: 6px; height: 7px; border-left: 2px solid currentColor; border-right: 2px solid currentColor; }
-
-/* A faint inner edge keeps light colors (lime, peony) visible on cream */
-.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(22, 20, 18, 0.12); }
-
-.rows { display: flex; flex-direction: column; flex: none; }
 
 .row {
+  position: relative;
   height: 36px;
   width: 100%;
+  flex: none;
+  padding: 0 12px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0;
   border: 0;
-  border-bottom: 1px solid var(--line);
   background: none;
   text-align: left;
-  flex: none;
 }
-button.row { transition: background-color 120ms, padding 120ms; }
-button.row:hover { background: var(--sand); padding: 0 6px; border-radius: 6px; }
-
-/* By client: a thin bar in the client's color shows their share of the week */
-.row.share {
-  background: linear-gradient(var(--c), var(--c)) no-repeat left bottom / var(--share) 2px;
-  border-bottom-color: var(--line);
-}
+.row + .row { border-top: 1px solid var(--divider); }
+button.row { transition: background-color 100ms; }
+button.row:hover { background: var(--hover); }
+.row[aria-pressed="true"] { background: var(--hover); font-weight: 600; }
 .row .meta { color: var(--muted); font-variant-numeric: tabular-nums; }
+.row .meta.money { color: var(--ink); font-weight: 500; }
+.row .meta.hours { width: 52px; text-align: right; }
+.row .chev { color: var(--faint); margin-right: -4px; }
+.row .check { color: var(--ink); }
+
+/* By client: a thin bar in the client's color under each row shows their share */
+.row.share::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  bottom: 0;
+  width: calc((100% - 24px) * var(--share));
+  height: 2px;
+  border-radius: 2px;
+  background: var(--c);
+}
+
+/* A faint inner edge keeps light colors (lime, peony) visible on white */
+.dot { width: 8px; height: 8px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(22, 20, 18, 0.12); }
+
+.empty-note { margin: 0; padding: 14px 12px; color: var(--muted); font-size: 12px; text-align: center; }
+
+/* ---------- Controls ---------- */
+
+/* Segmented control: Today / This week / Month, Week / Month / Year */
+.segmented {
+  flex: none;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--sand);
+}
+.segmented button {
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 120ms, color 120ms;
+}
+.segmented button:hover { color: var(--ink); }
+.segmented button[aria-pressed="true"] {
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(22, 20, 18, 0.14);
+}
+
+/* Period header: "October 2026   ‹ ›" */
+.period-nav { flex: none; display: flex; align-items: center; gap: 6px; }
+.period-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.period-title strong { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-
-.chip, .tag {
-  height: 26px;
-  padding: 0 12px;
+.chip {
+  height: 28px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--paper);
+  font-weight: 500;
+  transition: background-color 120ms, border-color 120ms, color 120ms;
+}
+.chip:hover { background: var(--hover); border-color: var(--line-strong); }
+.chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.client-chip { background: var(--cream); border-color: transparent; }
+.client-chip:hover { background: var(--sand); border-color: transparent; }
+.client-chip .dot { width: 7px; height: 7px; }
+.chip-ghost { background: transparent; border-style: dashed; color: var(--muted); }
+
+.tag {
+  height: 22px;
+  padding: 0 9px;
   display: inline-flex;
   align-items: center;
-  font-size: 13px;
-}
-.chip { transition: background-color 120ms, color 120ms, border-color 120ms; }
-.chip:hover { border-color: var(--muted); }
-.chip[aria-pressed="true"] {
-  background: var(--chip-color, var(--ink));
-  border-color: transparent;
-  color: var(--on-ink);
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
-/* Quick-start chips on the dashboard: a client's dot and name */
-.client-chip { gap: 6px; padding: 0 10px; }
-.client-chip .dot { width: 7px; height: 7px; }
-.chip-ghost { border-style: dashed; color: var(--muted); }
-
-/* Task chips in their groups (Design / Clients & admin) */
 .task-groups { display: flex; flex-direction: column; gap: 10px; }
 .task-group { display: flex; flex-direction: column; gap: 6px; }
-.group-name { font-size: 11px; color: var(--muted); }
+.group-name { font-size: 11px; font-weight: 600; color: var(--muted); }
 
 /* ---------- Forms ---------- */
 
-.field { display: flex; flex-direction: column; gap: 4px; }
-.field > span { font-size: 12px; color: var(--muted); }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field > span { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--muted); }
 
 .input {
   height: 32px;
@@ -334,61 +395,114 @@ button.row:hover { background: var(--sand); padding: 0 6px; border-radius: 6px; 
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--paper);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 120ms, box-shadow 120ms;
 }
-.input::placeholder { color: var(--muted); opacity: 0.8; }
-.input:focus { outline: none; border-color: var(--mocha); }
+.input::placeholder { color: var(--muted); opacity: 0.7; }
+.input:hover { border-color: var(--line-strong); }
+.input:focus { outline: none; border-color: var(--mocha); box-shadow: 0 0 0 3px rgba(110, 90, 84, 0.16); }
 
 select.input {
   appearance: none;
   padding-right: 28px;
-  background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236E6862' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;
+  background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236E6862' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
 }
 
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pair[hidden] { display: none; }
 
-.duration { display: flex; align-items: center; gap: 8px; }
-.duration strong { font-weight: 600; font-variant-numeric: tabular-nums; }
-
-.preview-count { font-size: 15px; font-weight: 600; }
-
-.btn:disabled { opacity: 0.5; cursor: default; filter: none; }
-
-.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
-.swatch {
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 50%;
-  padding: 0;
+/* "Duration  1h 20m · $100.00" summary under the times */
+.duration {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
 }
+.duration strong { font-weight: 650; font-variant-numeric: tabular-nums; }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; padding: 2px; }
+.swatch { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; }
 .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--cream), 0 0 0 4px var(--ink); } /* outer ring shows on any color */
+
+/* ---------- Timer card (dashboard) ---------- */
+
+.card-top, .card-clock { display: flex; align-items: center; gap: 8px; }
+.client-name { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+
+.clock { flex: 1; font-size: 32px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.clock .seconds { opacity: 0.4; font-weight: 500; } /* hours:minutes lead, seconds just tick along */
+
+.card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.status-pill {
+  height: 20px;
+  padding: 0 8px 0 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.status-pill.running { background: rgba(61, 190, 107, 0.16); color: #7BE09F; }
+.status-pill.paused { background: rgba(242, 169, 59, 0.18); color: var(--paused-text); }
+.pause-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--idle); }
+
+/* A green dot that breathes while time is being billed */
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--running);
+  animation: breathe 2s ease-out infinite;
+}
+@keyframes breathe {
+  0% { box-shadow: 0 0 0 0 rgba(61, 190, 107, 0.6); }
+  100% { box-shadow: 0 0 0 6px rgba(61, 190, 107, 0); }
+}
+
+/* Running: the card goes dark, like the pill on webpages */
+.card.live { background: var(--ink); border-color: var(--ink); color: var(--on-ink); box-shadow: var(--shadow-md); }
+.card.live .tag { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.16); color: rgba(255, 255, 255, 0.92); }
+.card.live .small.muted { color: rgba(255, 255, 255, 0.55); }
+.btn-on-dark { background: rgba(255, 255, 255, 0.1); color: var(--on-ink); }
+.btn-on-dark:hover { background: rgba(255, 255, 255, 0.17); }
+.btn-light { background: var(--paper); color: var(--ink); }
+.btn-light:hover { background: #ECE7DF; }
+
+/* Paused: a calm white card; the clock dims */
+.card.paused .clock { color: var(--muted); }
 
 /* ---------- Dashboard ---------- */
 
-.totals { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: none; }
+.totals { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .total {
   position: relative;
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
   text-align: left;
-  transition: border-color 120ms, box-shadow 120ms, transform 120ms;
+  transition: border-color 120ms, box-shadow 120ms;
 }
 /* The tiles open Stats */
-.total:hover { border-color: var(--muted); box-shadow: 0 6px 14px -10px rgba(22, 20, 18, 0.4); }
-.total:active { transform: scale(0.99); }
-.total .week-bars { position: absolute; top: 10px; right: 12px; }
-.total-value { font-size: 20px; font-weight: 650; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.total:hover { border-color: var(--line-strong); box-shadow: 0 6px 14px -10px rgba(22, 20, 18, 0.35); }
+.total .week-bars { position: absolute; top: 11px; right: 12px; }
+.total-value { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .total-sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* Mon–Sun mini chart in the This week tile */
 .week-bars { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
-.bar { width: 5px; height: var(--h); border-radius: 1.5px; background: #CFC6B8; }
+.bar { width: 5px; height: var(--h); border-radius: 1.5px; background: var(--line-strong); }
 .bar.today { background: var(--ink); }
 .bar.future { opacity: 0.4; }
-
-.row .meta.money { color: var(--ink); font-weight: 500; }
-.row .meta.hours { width: 56px; text-align: right; }
 
 .empty {
   margin: auto;
@@ -400,41 +514,44 @@ select.input {
   text-align: center;
 }
 .empty-circle {
-  width: 56px; height: 56px; border-radius: 50%; background: var(--sand);
-  display: grid; place-items: center;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--ink);
+  box-shadow: var(--shadow-md);
 }
-.empty-circle img { height: 24px; animation: flip 6s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+.empty-circle img { height: 26px; filter: invert(1); animation: flip 6s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+.empty h2 { margin: 6px 0 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.empty p { margin: 0 0 6px; color: var(--muted); }
 
 /* ---------- Entries: month calendar ---------- */
 
-.cal-nav { display: flex; align-items: center; gap: 6px; }
-.cal-title { flex: 1; display: flex; align-items: baseline; gap: 8px; }
-.cal-title strong { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
-.cal-arrow {
-  width: 28px; height: 28px; padding: 0;
-  border: 1px solid var(--line); border-radius: 6px; background: var(--paper);
-  font-size: 16px; line-height: 1;
-}
-.cal-arrow:hover { background: var(--sand); }
-.cal-arrow:disabled { opacity: 0.35; cursor: default; background: var(--paper); }
+.cal-card { padding: 10px; gap: 4px; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-weekday { padding-bottom: 2px; text-align: center; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; color: var(--muted); }
 
-.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; flex: none; }
-.cal-weekday { text-align: center; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; color: var(--muted); }
-
-/* Each day is shaded from white (nothing) toward mocha (your busiest day) */
+/* Each day is shaded from near-white (nothing) toward mocha (your busiest day) */
 .cal-day {
-  height: 38px; padding: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  border: 0; border-radius: 8px;
-  background: color-mix(in srgb, var(--mocha) var(--level), var(--paper));
+  height: 36px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--mocha) var(--level), #F7F4EF);
   font-variant-numeric: tabular-nums;
-  transition: box-shadow 100ms, transform 100ms;
+  transition: box-shadow 100ms;
 }
-.cal-day:hover { box-shadow: 0 0 0 1px var(--muted); transform: translateY(-1px); }
+.cal-day:hover { box-shadow: 0 0 0 1px var(--muted); }
 .cal-day.dark { color: var(--on-ink); }
-.cal-day.future { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.cal-day.future { background: transparent; color: var(--faint); }
 .cal-day.selected { box-shadow: 0 0 0 2px var(--ink); }
-.day-num { font-size: 12px; font-weight: 500; line-height: 16px; padding: 0 5px; border-radius: 999px; }
+.day-num { padding: 0 5px; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 16px; }
 .cal-day.today .day-num { background: var(--ink); color: var(--on-ink); font-weight: 700; }
 .day-dots { display: flex; gap: 2px; height: 5px; }
 .day-dots .dot { width: 5px; height: 5px; box-shadow: 0 0 0 1px var(--paper); }
@@ -443,57 +560,86 @@ select.input {
 
 /* ---------- Stats ---------- */
 
-.stat-hero { display: flex; flex-direction: column; gap: 2px; flex: none; }
-.stat-total { font-size: 32px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat-total { font-size: 30px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-.chart { position: relative; flex: none; padding-top: 4px; }
-.chart-bars {
-  display: flex; align-items: stretch; gap: 2px;
-  height: 96px;
-  border-bottom: 1px solid var(--line); /* baseline */
+/* "↑ 27% vs same time last week": neutral, since green and red are status colors */
+.compare {
+  height: 22px;
+  padding: 0 8px 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  background: var(--cream);
+  font-size: 11px;
+  font-weight: 600;
 }
+.compare span { color: var(--muted); font-weight: 500; }
+
+.chart { position: relative; padding-top: 4px; }
+.chart-bars { height: 96px; display: flex; align-items: stretch; gap: 2px; border-bottom: 1px solid var(--line); }
 /* Each column is a full-height hit target; the visible bar sits at the bottom */
-.chart-col {
-  flex: 1; min-width: 0; padding: 0; border: 0; background: none;
-  display: flex; align-items: flex-end;
-}
-.chart-fill { width: 100%; border-radius: 4px 4px 0 0; background: var(--mocha); opacity: 0.55; transition: opacity 100ms; }
-.chart-col.current .chart-fill { background: var(--ink); opacity: 1; }
-.chart-col:hover .chart-fill, .chart-col:focus-visible .chart-fill { opacity: 1; }
+.chart-col { flex: 1; min-width: 0; padding: 0; display: flex; align-items: flex-end; border: 0; background: none; }
+.chart-fill { width: 100%; border-radius: 4px 4px 0 0; background: #D9D0C3; transition: background-color 100ms; }
+.chart-col.current .chart-fill { background: var(--ink); }
+.chart-col:hover .chart-fill, .chart-col:focus-visible .chart-fill { background: var(--mocha); }
+.chart-col.current:hover .chart-fill { background: #2C2925; }
 .chart-col:focus-visible { outline-offset: 0; }
-.chart-axis { display: flex; gap: 2px; margin-top: 4px; }
-.chart-axis span { flex: 1; min-width: 0; text-align: center; font-size: 10px; color: var(--muted); overflow: visible; white-space: nowrap; }
+.chart-axis { margin-top: 5px; display: flex; gap: 2px; }
+.chart-axis span { flex: 1; min-width: 0; text-align: center; font-size: 10px; color: var(--muted); white-space: nowrap; }
 .chart-tip {
-  position: absolute; top: -34px; z-index: 1;
-  display: flex; flex-direction: column;
-  padding: 5px 8px; border-radius: 6px;
-  background: var(--ink); color: var(--on-ink);
-  font-size: 11px; line-height: 1.3; white-space: nowrap; pointer-events: none;
+  position: absolute;
+  top: -30px;
+  z-index: 1;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--on-ink);
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-md);
 }
 .chart-tip[hidden] { display: none; }
 .chart-tip span { opacity: 0.75; font-variant-numeric: tabular-nums; }
 
-.mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; flex: none; }
+.mini-stats { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .mini {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper);
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
 }
-.mini strong { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.mini strong { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 
 .stat-row {
   height: 36px;
-  display: grid; grid-template-columns: 8px minmax(0, 1fr) 64px 48px 32px; align-items: center; gap: 8px;
-  border-bottom: 1px solid var(--line);
+  padding: 0 12px;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) 56px 46px 30px;
+  align-items: center;
+  gap: 8px;
 }
-.stat-bar { height: 6px; border-radius: 3px; background: var(--sand); overflow: hidden; }
+.stat-row + .stat-row { border-top: 1px solid var(--divider); }
+.stat-bar { height: 6px; overflow: hidden; border-radius: 3px; background: var(--hover); }
 .stat-bar span { display: block; height: 100%; border-radius: 3px; }
 .stat-row .meta { text-align: right; font-variant-numeric: tabular-nums; }
 .stat-row .meta.money { color: var(--ink); font-weight: 500; }
 .stat-row .meta.share { color: var(--muted); font-size: 12px; }
 
+/* ---------- Export ---------- */
+
+.preview-count { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+
 /* Anyone who has asked their computer for less motion gets a still popup */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
-.empty h2 { margin: 0; font-size: 15px; font-weight: 600; }
-.empty p { margin: 0; color: var(--muted); }

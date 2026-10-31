@@ -1,9 +1,12 @@
 // popup/popup.js
-// Draws the popup one screen at a time, matching the Figma Low-fi page:
+// Draws the popup one screen at a time:
 //   dashboard → start timer / switch client / clients → client (new or edit)
+//             → entries → edit entry / add past time · stats · export
+// Every screen shares one frame (header bar, scrolling body, action bar).
 // All the actual saving happens in shared/data.js.
 
 import * as data from '../shared/data.js';
+import { icon } from './icons.js';
 
 const app = document.getElementById('app');
 
@@ -46,6 +49,45 @@ function select(options, selected) {
 
 function field(label, input) {
   return el('label', { className: 'field' }, el('span', {}, label), input);
+}
+
+// Rows grouped in one white card
+function list(rows, emptyText = '') {
+  const items = rows.filter(Boolean);
+  if (items.length === 0) return emptyText ? el('div', { className: 'list' }, el('p', { className: 'empty-note' }, emptyText)) : null;
+  return el('div', { className: 'list' }, ...items);
+}
+
+// "LABEL ............ right side"
+function sectionHead(left, right = '') {
+  return el('div', { className: 'section-head' },
+    el('span', { className: 'label' }, left),
+    right ? el('span', { className: 'label num' }, right) : null,
+  );
+}
+
+// Segmented control: segmented([['week', 'Week'], ...], 'week', (value) => ...)
+function segmented(options, value, onPick) {
+  return el('div', { className: 'segmented', role: 'group' }, ...options.map(([v, label]) =>
+    el('button', { ariaPressed: String(v === value), onclick: () => onPick(v) }, label),
+  ));
+}
+
+// "October 2026   ‹ ›" with previous/next buttons
+function periodNav({ title, sub = '', noun, onStep, canGoNext }) {
+  return el('div', { className: 'period-nav' },
+    el('div', { className: 'period-title' },
+      el('strong', {}, title),
+      sub ? el('span', { className: 'small muted num' }, sub) : null,
+    ),
+    el('button', { className: 'icon-btn bordered', ariaLabel: `Previous ${noun}`, title: `Previous ${noun}`, onclick: () => onStep(-1) }, icon('back', 15)),
+    el('button', { className: 'icon-btn bordered', ariaLabel: `Next ${noun}`, title: `Next ${noun}`, disabled: !canGoNext, onclick: () => onStep(1) }, icon('next', 15)),
+  );
+}
+
+// A button with an icon in front: iconButton('btn btn-primary', 'play', 'Start timer', onclick)
+function iconButton(className, iconName, label, onclick, iconClass = '') {
+  return el('button', { className, onclick }, icon(iconName, 15, iconClass), label);
 }
 
 function go(name, params = {}) {
@@ -101,16 +143,16 @@ function bigClock() {
   return el('span', { className: 'clock' }, liveText(part('main')), liveText(part('seconds'), { className: 'seconds' }));
 }
 
-// The frame every screen shares: header, error line, scrolling body, footer.
+// The frame every screen shares: header bar, error line, scrolling body, action bar.
 function screen({ title, back, logo = false, links = [], body = [], footer = null }) {
   const header = el('div', { className: 'header' },
-    back ? el('button', { className: 'back', ariaLabel: 'Back', onclick: back }, '←') : null,
+    back ? el('button', { className: 'icon-btn', ariaLabel: 'Back', title: 'Back', onclick: back }, icon('back', 18)) : null,
     // Brand mark: the white hourglass on an ink tile, flipping while a timer runs
     logo ? el('span', { className: 'brand-mark' },
       el('img', { className: isRunning() ? 'logo flipping' : 'logo', src: LOGO_URL, alt: '' }),
     ) : null,
     el('h1', { className: logo ? 'wordmark' : '' }, title),
-    ...links,
+    links.length ? el('nav', { className: 'nav' }, ...links) : null,
   );
   return el('div', { className: 'screen' },
     header,
@@ -140,7 +182,7 @@ function dashboardScreen() {
         el('div', { className: 'empty-circle' }, el('img', { src: LOGO_URL, alt: '' })),
         el('h2', {}, 'No clients yet'),
         el('p', {}, 'Add a client to start tracking billable time.'),
-        el('button', { className: 'btn btn-go', onclick: () => go('client', { from: 'dashboard' }) }, 'Add client'),
+        iconButton('btn btn-primary', 'plus', 'Add client', () => go('client', { from: 'dashboard' })),
       )],
     });
   }
@@ -154,15 +196,12 @@ function dashboardScreen() {
     body: [
       timerCard(),
       totals(),
-      el('div', { className: 'section-head' },
-        el('span', { className: 'label' }, 'By client'),
-        el('span', { className: 'label' }, 'This week'),
-      ),
+      sectionHead('By client', 'This week'),
       byClientRows(),
     ],
     footer: [
-      el('button', { className: 'btn btn-outline btn-half', onclick: () => go('past', { from: 'dashboard' }) }, 'Add past time'),
-      el('button', { className: 'btn btn-outline btn-half', onclick: () => go('export') }, 'Export CSV'),
+      iconButton('btn btn-secondary btn-half', 'plus', 'Add past time', () => go('past', { from: 'dashboard' })),
+      iconButton('btn btn-secondary btn-half', 'download', 'Export CSV', () => go('export')),
     ],
   });
 }
@@ -180,25 +219,23 @@ function timerCard() {
 
     const main = canContinue
       ? el('button', {
-        className: 'btn btn-go btn-block btn-continue',
+        className: 'btn btn-primary btn-block btn-continue',
         onclick: () => actThenClose(() => data.startTimer({ clientId: last.clientId, task: last.task, note: last.note })),
       },
-        el('span', { className: 'play' }),
+        icon('play', 15, 'go'),
         el('span', { className: 'grow' }, el('strong', {}, 'Continue '), `${lastClient.name} · ${last.task}`),
+        icon('chevron', 14),
       )
-      : el('button', { className: 'btn btn-go btn-block', onclick: () => go('start') }, el('span', { className: 'play' }), 'Start timer');
+      : iconButton('btn btn-primary btn-block', 'play', 'Start timer', () => go('start'), 'go');
 
-    return el('div', { className: 'card hero' },
-      el('div', { className: 'section-head' },
-        el('span', { className: 'label' }, 'Ready to track'),
-        el('span', { className: 'label' }, today),
-      ),
+    return el('div', { className: 'card' },
+      sectionHead('Ready to track', today),
       main,
       el('div', { className: 'chips' },
         ...data.clientsByRecent(state).slice(0, 4).map((c) =>
-          el('button', { className: 'chip client-chip', onclick: () => go('start', { clientId: c.id }) }, dot(c.color), c.name),
+          el('button', { className: 'chip client-chip', title: `Start a timer for ${c.name}`, onclick: () => go('start', { clientId: c.id }) }, dot(c.color), c.name),
         ),
-        el('button', { className: 'chip chip-ghost', onclick: () => go('start') }, '+ New timer'),
+        el('button', { className: 'chip chip-ghost', onclick: () => go('start') }, icon('plus', 13), 'New timer'),
       ),
     );
   }
@@ -206,27 +243,32 @@ function timerCard() {
   const client = data.findClient(state, t.clientId);
   const running = t.status === 'running';
   const canSwitch = data.activeClients(state).some((c) => c.id !== t.clientId);
+  const switchButton = canSwitch
+    ? iconButton(`btn btn-sm ${running ? 'btn-on-dark' : 'btn-secondary'}`, 'swap', 'Switch', () => go('switch'))
+    : null;
 
   return el('div', { className: running ? 'card live' : 'card paused' },
-    el('div', { className: `label status ${running ? 'running' : 'paused'}` },
-      el('span', { className: running ? 'live-dot' : 'pause-mark' }),
-      running ? 'Running' : 'Paused',
-    ),
+    // Who you're billing, and a way to switch
     el('div', { className: 'card-top' },
       dot(client.color),
-      el('strong', { className: 'grow' }, client.name),
+      el('span', { className: 'client-name grow' }, client.name),
+      switchButton,
+    ),
+    // Status, task, and note on one line
+    el('div', { className: 'card-top' },
+      el('span', { className: `status-pill ${running ? 'running' : 'paused'}` },
+        el('span', { className: running ? 'live-dot' : 'pause-dot' }),
+        running ? 'Running' : 'Paused',
+      ),
       el('span', { className: 'tag' }, t.task),
+      t.note ? el('span', { className: 'small muted grow', title: t.note }, t.note) : null,
     ),
-    t.note ? el('p', { className: 'small muted' }, t.note) : null,
-    el('div', { className: 'card-clock' },
-      bigClock(),
-      canSwitch ? el('button', { className: 'btn btn-outline btn-pill', onclick: () => go('switch') }, 'Switch client →') : null,
-    ),
-    el('div', { className: 'pair' },
+    el('div', { className: 'card-clock' }, bigClock()),
+    el('div', { className: 'card-actions' },
       running
-        ? el('button', { className: 'btn btn-pause', onclick: () => act(data.pauseTimer) }, 'Pause')
-        : el('button', { className: 'btn btn-go', onclick: () => act(data.resumeTimer) }, 'Resume'),
-      el('button', { className: 'btn btn-stop', onclick: () => act(data.stopTimer) }, 'Stop'),
+        ? iconButton('btn btn-on-dark', 'pause', 'Pause', () => act(data.pauseTimer))
+        : iconButton('btn btn-primary', 'play', 'Resume', () => act(data.resumeTimer), 'go'),
+      iconButton(running ? 'btn btn-light' : 'btn btn-secondary', 'stop', 'Stop', () => act(data.stopTimer)),
     ),
   );
 }
@@ -270,12 +312,12 @@ function totals() {
 
 function byClientRows() {
   const weekOf = (id) => data.workedBetween(state, data.startOfWeek(), Infinity, id);
-  const clients = data.activeClients(state).sort((a, b) => weekOf(b.id).ms - weekOf(a.id).ms);
+  const clients = data.activeClients(state).sort((a, b) => weekOf(b.id).amount - weekOf(a.id).amount || weekOf(b.id).ms - weekOf(a.id).ms);
   const most = Math.max(1, ...clients.map((c) => weekOf(c.id).ms));
-  return el('div', { className: 'rows' }, ...clients.map((c) =>
+  return list(clients.map((c) =>
     el('div', {
       className: 'row share',
-      style: `--c: ${data.colorHex(c.color)}; --share: ${(weekOf(c.id).ms / most) * 100}%`,
+      style: `--c: ${data.colorHex(c.color)}; --share: ${weekOf(c.id).ms / most}`,
     },
       dot(c.color),
       el('span', { className: 'grow' }, c.name),
@@ -296,19 +338,17 @@ function startScreen({ clientId: chosen } = {}) {
   const last = data.lastEntryFor(state, clientId) || data.lastEntry(state);
   let task = last && data.TASKS.includes(last.task) ? last.task : data.TASKS[0];
 
-  const clientRows = el('div', { className: 'rows' });
+  const clientRows = el('div', { className: 'list' });
   const chips = el('div', { className: 'task-groups' });
   const noteInput = el('input', { className: 'input', placeholder: 'e.g. Homepage revisions', maxLength: 200 });
 
-  // Redraw the client list and task chips to show what's picked.
-  // The picked task chip uses the picked client's color, as in Figma.
+  // Redraw the client list and task chips to show what's picked
   function update() {
-    const color = data.colorHex(data.findClient(state, clientId).color);
     clientRows.replaceChildren(...clients.map((c) =>
       el('button', { className: 'row', ariaPressed: String(c.id === clientId), onclick: () => { clientId = c.id; update(); } },
         dot(c.color),
         el('span', { className: 'grow' }, c.name),
-        c.id === clientId ? dot(c.color) : null,
+        c.id === clientId ? icon('check', 15, 'check') : null,
       ),
     ));
     chips.replaceChildren(...data.TASK_GROUPS.map(([group, tasks]) =>
@@ -318,7 +358,6 @@ function startScreen({ clientId: chosen } = {}) {
           el('button', {
             className: 'chip',
             ariaPressed: String(name === task),
-            style: `--chip-color: ${color}`,
             onclick: () => { task = name; update(); },
           }, name),
         )),
@@ -336,13 +375,13 @@ function startScreen({ clientId: chosen } = {}) {
     title: 'Start timer',
     back: () => go('dashboard'),
     body: [
-      el('div', { className: 'label' }, 'Client'),
+      sectionHead('Client'),
       clientRows,
-      el('div', { className: 'label' }, 'Task'),
+      sectionHead('Task'),
       chips,
-      el('label', { className: 'field' }, el('span', {}, 'Note (optional)'), noteInput),
+      field('Note (optional)', noteInput),
     ],
-    footer: [el('button', { className: 'btn btn-go btn-block', onclick: start }, 'Start timer')],
+    footer: [iconButton('btn btn-primary btn-block', 'play', 'Start timer', start, 'go')],
   });
 }
 
@@ -359,11 +398,12 @@ function switchScreen() {
     back: () => go('dashboard'),
     body: [
       el('p', { className: 'small muted' }, `Ends the entry for ${from.name} and starts a new one, keeping the task (${t.task}).`),
-      el('div', { className: 'rows' }, ...others.map((c) =>
+      list(others.map((c) =>
         el('button', { className: 'row', onclick: () => actThenClose(() => data.switchClient(c.id)) },
           dot(c.color),
           el('span', { className: 'grow' }, c.name),
           el('span', { className: 'meta' }, data.formatRate(c.rate)),
+          icon('chevron', 14, 'chev'),
         ),
       )),
     ],
@@ -378,16 +418,16 @@ function clientsScreen() {
     title: 'Clients',
     back: () => go('dashboard'),
     body: [
-      clients.length === 0 ? el('p', { className: 'small muted' }, 'No clients yet.') : null,
-      el('div', { className: 'rows' }, ...clients.map((c) =>
+      list(clients.map((c) =>
         el('button', { className: 'row', onclick: () => go('client', { id: c.id, from: 'clients' }) },
           dot(c.color),
           el('span', { className: 'grow' }, c.name),
           el('span', { className: 'meta' }, data.formatRate(c.rate)),
+          icon('chevron', 14, 'chev'),
         ),
-      )),
+      ), 'No clients yet.'),
     ],
-    footer: [el('button', { className: 'btn btn-go btn-block', onclick: () => go('client', { from: 'clients' }) }, 'Add client')],
+    footer: [iconButton('btn btn-primary btn-block', 'plus', 'Add client', () => go('client', { from: 'clients' }))],
   });
 }
 
@@ -439,11 +479,10 @@ function clientScreen({ id, from = 'clients' }) {
   };
 
   const body = el('div', { className: 'stack' },
-    el('label', { className: 'field' }, el('span', {}, 'Client name'), nameInput),
-    el('div', { className: 'label' }, 'Color'),
-    swatches,
-    el('label', { className: 'field' }, el('span', {}, 'Hourly rate ($)'), rateInput),
-    el('label', { className: 'field' }, el('span', {}, 'Note (optional)'), noteInput),
+    field('Client name', nameInput),
+    el('div', { className: 'field' }, el('span', {}, 'Color'), swatches),
+    field('Hourly rate ($)', rateInput),
+    field('Note (optional)', noteInput),
   );
   body.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') save(); });
   setTimeout(() => nameInput.focus());
@@ -453,10 +492,10 @@ function clientScreen({ id, from = 'clients' }) {
     back: leave,
     body: [body],
     footer: [
-      existing ? el('button', { className: 'btn btn-delete-text', onclick: remove }, 'Delete') : null,
+      existing ? el('button', { className: 'btn btn-danger', onclick: remove }, 'Delete') : null,
       el('span', { className: 'spacer' }),
-      el('button', { className: 'btn btn-outline', onclick: leave }, 'Cancel'),
-      el('button', { className: 'btn btn-go', onclick: save }, 'Save'),
+      el('button', { className: 'btn btn-secondary', onclick: leave }, 'Cancel'),
+      el('button', { className: 'btn btn-primary', onclick: save }, existing ? 'Save' : 'Add client'),
     ],
   });
 }
@@ -470,8 +509,9 @@ function entryRow(e) {
   const client = data.findClient(state, e.clientId);
   return el('button', { className: 'row', onclick: () => go('entry', { id: e.id }) },
     dot(client.color),
-    el('span', { className: 'grow' }, `${client.name} · ${e.task}`),
+    el('span', { className: 'grow' }, `${client.name} · `, el('span', { className: 'muted' }, e.task)),
     el('span', { className: 'meta' }, data.formatShortDuration(data.entryMs(e))),
+    icon('chevron', 14, 'chev'),
   );
 }
 
@@ -502,13 +542,8 @@ function calendarView() {
     const entries = [...(byDay.get(day) || [])].sort((a, b) => a.start - b.start);
     const total = data.totalOf(entries);
     detail.replaceChildren(
-      el('div', { className: 'section-head' },
-        el('span', { className: 'label' }, data.formatDayLabel(day)),
-        el('span', { className: 'label' }, entries.length ? `${data.formatHours(total.ms)} · ${data.formatMoney(total.amount, 0)}` : ''),
-      ),
-      entries.length
-        ? el('div', { className: 'rows' }, ...entries.map(entryRow))
-        : el('p', { className: 'small muted' }, day > today ? 'Nothing yet.' : 'Nothing logged this day.'),
+      sectionHead(data.formatDayLabel(day), entries.length ? `${data.formatHours(total.ms)} · ${data.formatMoney(total.amount, 0)}` : ''),
+      list(entries.map(entryRow), day > today ? 'Nothing yet.' : 'Nothing logged this day.'),
     );
   }
 
@@ -568,16 +603,15 @@ function calendarView() {
     selectedDay = null;
     render();
   };
-  const nav = el('div', { className: 'cal-nav' },
-    el('div', { className: 'cal-title' },
-      el('strong', {}, new Date(calendarMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })),
-      el('span', { className: 'small muted' }, `${data.formatHours(monthTotal.ms)} · ${data.formatMoney(monthTotal.amount, 0)}`),
-    ),
-    el('button', { className: 'cal-arrow', ariaLabel: 'Previous month', onclick: () => changeMonth(-1) }, '‹'),
-    el('button', { className: 'cal-arrow', ariaLabel: 'Next month', disabled: calendarMonth >= thisMonth, onclick: () => changeMonth(1) }, '›'),
-  );
+  const nav = periodNav({
+    title: new Date(calendarMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    sub: `${data.formatHours(monthTotal.ms)} · ${data.formatMoney(monthTotal.amount, 0)}`,
+    noun: 'month',
+    onStep: changeMonth,
+    canGoNext: calendarMonth < thisMonth,
+  });
 
-  return [nav, grid, detail];
+  return [nav, el('div', { className: 'card cal-card' }, grid), detail];
 }
 
 function entriesScreen() {
@@ -586,14 +620,12 @@ function entriesScreen() {
   // "Add past time" from the calendar starts on the picked day (if it's not in the future).
   // Read when clicked, since picking a day doesn't redraw the screen.
   const pastDay = () => (entriesRange === 'month' && selectedDay !== null && selectedDay <= data.startOfToday() ? selectedDay : null);
-  const footer = [el('button', { className: 'btn btn-outline btn-block', onclick: () => go('past', { from: 'entries', day: pastDay() }) }, 'Add past time')];
-  const chips = el('div', { className: 'chips' }, ...ranges.map((name) =>
-    el('button', {
-      className: 'chip',
-      ariaPressed: String(name === entriesRange),
-      onclick: () => { entriesRange = name; render(); },
-    }, name === 'month' ? 'Month' : data.RANGES[name]),
-  ));
+  const footer = [iconButton('btn btn-secondary btn-block', 'plus', 'Add past time', () => go('past', { from: 'entries', day: pastDay() }))];
+  const chips = segmented(
+    ranges.map((name) => [name, name === 'month' ? 'Month' : data.RANGES[name]]),
+    entriesRange,
+    (name) => { entriesRange = name; render(); },
+  );
 
   if (entriesRange === 'month') {
     return screen({ title: 'Entries', back: () => go('dashboard'), body: [chips, ...calendarView()], footer });
@@ -612,9 +644,10 @@ function entriesScreen() {
 
   const groups = [];
   for (const [day, dayEntries] of days) {
+    const dayTotal = data.totalOf(dayEntries);
     groups.push(
-      el('div', { className: 'label' }, data.formatDayLabel(day)),
-      el('div', { className: 'rows' }, ...dayEntries.map(entryRow)),
+      sectionHead(data.formatDayLabel(day), `${data.formatHours(dayTotal.ms)} · ${data.formatMoney(dayTotal.amount, 0)}`),
+      list(dayEntries.map(entryRow)),
     );
   }
 
@@ -623,7 +656,7 @@ function entriesScreen() {
     back: () => go('dashboard'),
     body: [
       chips,
-      entries.length === 0 ? el('p', { className: 'small muted' }, 'No entries in this period.') : null,
+      entries.length === 0 ? list([], 'No entries in this period.') : null,
       ...groups,
     ],
     footer,
@@ -707,9 +740,10 @@ function entryScreen({ id }) {
     back: () => go('entries'),
     body: [fields],
     footer: [
-      el('button', { className: 'btn btn-delete-text', onclick: remove }, 'Delete'),
+      el('button', { className: 'btn btn-danger', onclick: remove }, 'Delete'),
       el('span', { className: 'spacer' }),
-      el('button', { className: 'btn btn-go', onclick: () => act(() => data.updateEntry(id, values()), 'entries') }, 'Save'),
+      el('button', { className: 'btn btn-secondary', onclick: () => go('entries') }, 'Cancel'),
+      el('button', { className: 'btn btn-primary', onclick: () => act(() => data.updateEntry(id, values()), 'entries') }, 'Save'),
     ],
   });
 }
@@ -721,7 +755,7 @@ function pastScreen({ from = 'dashboard', day = null }) {
     title: 'Add past time',
     back: () => go(from),
     body: [fields],
-    footer: [el('button', { className: 'btn btn-go btn-block', onclick: () => act(() => data.addEntry(values()), from) }, 'Add time')],
+    footer: [iconButton('btn btn-primary btn-block', 'plus', 'Add time', () => act(() => data.addEntry(values()), from))],
   });
 }
 
@@ -742,11 +776,15 @@ function statsScreen() {
   const prev = data.statsPeriod(statsKind, statsOffset - 1, now);
   const prevTo = statsOffset === 0 ? prev.from + (now - period.from) : prev.to;
   const prevTotal = data.sumPieces(data.piecesBetween(state, prev.from, Math.min(prevTo, prev.to), now));
-  let compare = '';
+  let compare = null;
   if (prevTotal.amount > 0) {
     const change = Math.round(((total.amount - prevTotal.amount) / prevTotal.amount) * 100);
     const when = statsOffset === 0 ? `same time last ${noun}` : `previous ${noun}`;
-    compare = `${change >= 0 ? '▲' : '▼'} ${Math.abs(change)}% vs ${when}`;
+    compare = el('span', { className: 'compare' },
+      icon(change >= 0 ? 'up' : 'down', 12),
+      `${Math.abs(change)}%`,
+      el('span', {}, `vs ${when}`),
+    );
   }
 
   const hours = total.ms / 3600000;
@@ -760,31 +798,24 @@ function statsScreen() {
     title: 'Stats',
     back: () => go('dashboard'),
     body: [
-      el('div', { className: 'chips' }, ...['week', 'month', 'year'].map((kind) =>
-        el('button', {
-          className: 'chip',
-          ariaPressed: String(kind === statsKind),
-          onclick: () => { statsKind = kind; statsOffset = 0; render(); },
-        }, kind[0].toUpperCase() + kind.slice(1)),
-      )),
-      el('div', { className: 'cal-nav' },
-        el('div', { className: 'cal-title' }, el('strong', {}, period.label)),
-        el('button', { className: 'cal-arrow', ariaLabel: `Previous ${noun}`, onclick: () => changePeriod(-1) }, '‹'),
-        el('button', { className: 'cal-arrow', ariaLabel: `Next ${noun}`, disabled: statsOffset >= 0, onclick: () => changePeriod(1) }, '›'),
+      segmented([['week', 'Week'], ['month', 'Month'], ['year', 'Year']], statsKind, (kind) => { statsKind = kind; statsOffset = 0; render(); }),
+      periodNav({ title: period.label, noun, onStep: changePeriod, canGoNext: statsOffset < 0 }),
+      // Headline number and the chart, together in one card
+      el('div', { className: 'card' },
+        el('div', {},
+          el('div', { className: 'label' }, 'Billed'),
+          el('div', { className: 'stat-total' }, data.formatMoney(total.amount)),
+        ),
+        el('div', { className: 'stat-sub' }, el('span', { className: 'small muted num' }, `${data.formatHours(total.ms)} tracked`), compare),
+        barChart(period, pieces, now),
       ),
-      // Headline number
-      el('div', { className: 'stat-hero' },
-        el('div', { className: 'stat-total' }, data.formatMoney(total.amount)),
-        el('div', { className: 'small muted' }, `${data.formatHours(total.ms)} billed${compare ? ' · ' + compare : ''}`),
-      ),
-      barChart(period, pieces, now),
       el('div', { className: 'mini-stats' },
         miniStat('Avg rate', avgRate ? data.formatRate(Math.round(avgRate)) : '—'),
         miniStat('Days worked', String(days.length)),
         miniStat('Busiest day', busiest ? `${new Date(busiest.key).toLocaleDateString('en-US', { weekday: 'short' })} ${new Date(busiest.key).getDate()}` : '—',
           busiest ? data.formatHours(busiest.ms) : ''),
       ),
-      pieces.length === 0 ? el('p', { className: 'small muted' }, `No time logged this ${noun}.`) : null,
+      pieces.length === 0 ? list([], `No time logged this ${noun}.`) : null,
       ...breakdown('By client', data.groupPieces(pieces, (p) => p.clientId), total, 'amount', (g) => {
         const client = data.findClient(state, g.key);
         return { name: client.name, color: data.colorHex(client.color), value: data.formatMoney(g.amount, 0) };
@@ -852,8 +883,8 @@ function breakdown(title, groups, total, measure, describe) {
   if (groups.length === 0) return [];
   const most = Math.max(...groups.map((g) => g[measure])) || 1;
   return [
-    el('div', { className: 'label' }, title),
-    el('div', { className: 'rows' }, ...groups.map((g) => {
+    sectionHead(title, measure === 'amount' ? 'Billed' : 'Time'),
+    el('div', { className: 'list' }, ...groups.map((g) => {
       const { name, color, value } = describe(g);
       const share = total[measure] ? Math.round((g[measure] / total[measure]) * 100) : 0;
       return el('div', { className: 'stat-row' },
@@ -885,9 +916,9 @@ function exportScreen() {
   const toInput = el('input', { className: 'input', type: 'date', value: today, max: today });
   const customDates = el('div', { className: 'pair', hidden: true }, field('From', fromInput), field('To', toInput));
 
-  const count = el('div', { className: 'preview-count' });
-  const totals = el('div', { className: 'muted' });
-  const download = el('button', { className: 'btn btn-go btn-block' }, 'Download CSV');
+  const count = el('div', { className: 'preview-count num' });
+  const totals = el('div', { className: 'small muted num' });
+  const download = el('button', { className: 'btn btn-primary btn-block' }, icon('download', 15), 'Download CSV');
 
   // The chosen period as timestamps; custom "To" includes that whole day
   function period() {
@@ -941,7 +972,7 @@ function exportScreen() {
       field('Date range', rangeSel),
       customDates,
       field('Client', clientSel),
-      el('div', { className: 'card' }, el('div', { className: 'label' }, 'Preview'), count, totals),
+      el('div', { className: 'card' }, el('div', {}, el('div', { className: 'label' }, 'Preview'), count, totals)),
     ],
     footer: [download],
   });

@@ -64,40 +64,64 @@
       box-shadow: 0 8px 28px rgba(22, 20, 18, 0.16);
     }
     .card[hidden] { display: none; }
-    .card-name { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
-    .big-clock { font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .card-name { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+    .big-clock { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
     .tag {
-      align-self: flex-start; height: 26px; padding: 0 12px;
+      flex: none; height: 22px; padding: 0 9px;
       display: inline-flex; align-items: center;
-      border: 1px solid var(--line); border-radius: 999px;
+      border: 1px solid var(--line); border-radius: 999px; font-size: 12px; font-weight: 500;
     }
+    /* Same calm buttons as the popup: ink primary, white secondary */
     .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .btn { height: 32px; border: 0; border-radius: 6px; font-weight: 600; color: var(--on-ink); }
-    .btn:hover { filter: brightness(0.95); }
-    .btn-pause { background: var(--idle); }
-    .btn-go { background: var(--running); }
-    .btn-stop { background: var(--delete); }
+    .btn {
+      height: 32px; border: 1px solid transparent; border-radius: 6px; font-weight: 600;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn svg { flex: none; }
+    .btn-primary { background: var(--ink); color: var(--on-ink); }
+    .btn-primary:hover { background: #2C2925; }
+    .btn-primary .go { color: var(--running); }
+    .btn-secondary { background: var(--paper); border-color: var(--line); color: var(--ink); }
+    .btn-secondary:hover { background: #F3EFE8; border-color: #CFC6B8; }
     .label {
-      margin-top: 2px; font-size: 10px; font-weight: 500;
-      letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
+      margin-top: 2px; font-size: 10px; font-weight: 600;
+      letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted);
     }
-    .list { display: flex; flex-direction: column; max-height: 180px; overflow-y: auto; }
+    .list {
+      display: flex; flex-direction: column; max-height: 180px; overflow-y: auto;
+      border: 1px solid var(--line); border-radius: 10px;
+    }
     .row {
-      width: 100%; height: 36px; padding: 0;
+      width: 100%; height: 36px; padding: 0 10px;
       display: flex; align-items: center; gap: 8px;
-      border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left;
+      border: 0; background: none; text-align: left;
     }
-    .row:hover { background: var(--cream); }
+    .row + .row { border-top: 1px solid #EEE9E1; }
+    .row:hover { background: #F3EFE8; }
     .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .arrow { color: var(--muted); }
-    .link { height: 32px; border: 0; border-radius: 6px; background: none; font-weight: 600; }
-    .link:hover { background: var(--cream); }
+    .chev { color: #B3AA9E; display: flex; }
+    .link {
+      height: 32px; border: 0; border-radius: 6px; background: none; font-weight: 600;
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    }
+    .link:hover { background: #F3EFE8; }
 
     @media print { .wrap { display: none; } }
   `;
 
   const PAUSE_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1.5" width="3" height="9" rx="1" fill="currentColor"/><rect x="7" y="1.5" width="3" height="9" rx="1" fill="currentColor"/></svg>';
   const PLAY_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.8v8.4a.6.6 0 0 0 .9.5l6.6-4.2a.6.6 0 0 0 0-1L3.9 1.3a.6.6 0 0 0-.9.5z" fill="currentColor"/></svg>';
+  const STOP_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="2" width="8" height="8" rx="1.5" fill="currentColor"/></svg>';
+  const CHEVRON_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 17l5-5-5-5"/></svg>';
+
+  // An inline icon from one of the strings above
+  function svg(markup, className = '') {
+    const span = document.createElement('span');
+    span.className = className;
+    span.style.display = 'flex';
+    span.innerHTML = markup;
+    return span;
+  }
 
   // A custom element name no website will style, reset to defaults and pinned to the corner
   const host = document.createElement('hourglass-pill');
@@ -185,21 +209,24 @@
 
     const others = data.activeClients(state).filter((c) => c.id !== t.clientId);
     card.replaceChildren(...[
-      el('div', { className: 'card-name' }, dot(client.color), el('span', { className: 'grow' }, client.name)),
+      el('div', { className: 'card-name' },
+        dot(client.color),
+        el('span', { className: 'grow' }, client.name),
+        el('span', { className: 'tag' }, t.task),
+      ),
       clock('big-clock'),
-      el('span', { className: 'tag' }, t.task),
       el('div', { className: 'btns' },
         running
-          ? el('button', { className: 'btn btn-pause', onclick: () => run(toggle) }, 'Pause')
-          : el('button', { className: 'btn btn-go', onclick: () => run(toggle) }, 'Resume'),
-        el('button', { className: 'btn btn-stop', onclick: () => run(data.stopTimer) }, 'Stop'),
+          ? el('button', { className: 'btn btn-secondary', onclick: () => run(toggle) }, svg(PAUSE_ICON), 'Pause')
+          : el('button', { className: 'btn btn-primary', onclick: () => run(toggle) }, svg(PLAY_ICON, 'go'), 'Resume'),
+        el('button', { className: running ? 'btn btn-primary' : 'btn btn-secondary', onclick: () => run(data.stopTimer) }, svg(STOP_ICON), 'Stop'),
       ),
       others.length ? el('div', { className: 'label' }, 'Switch to') : null,
       others.length ? el('div', { className: 'list' }, ...others.map((c) =>
         el('button', { className: 'row', onclick: () => { open = false; run(() => data.switchClient(c.id)); } },
           dot(c.color),
           el('span', { className: 'grow' }, c.name),
-          el('span', { className: 'arrow' }, '→'),
+          svg(CHEVRON_ICON, 'chev'),
         ),
       )) : null,
       el('button', {
@@ -208,7 +235,7 @@
           setOpen(false);
           chrome.runtime.sendMessage({ type: 'open-dashboard' }).catch(() => {});
         },
-      }, 'Open dashboard'),
+      }, 'Open dashboard', svg(CHEVRON_ICON, 'chev')),
     ].filter(Boolean));
   }
 
