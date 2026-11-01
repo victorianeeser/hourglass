@@ -69,8 +69,8 @@
     .big-clock { font-size: 30px; font-weight: 650; letter-spacing: -0.04em; font-variation-settings: 'opsz' 40; font-feature-settings: 'ss07'; }
     .big-clock .d { letter-spacing: 0; }
     .tag {
-      flex: none; height: 22px; padding: 0 9px;
-      display: inline-flex; align-items: center;
+      flex: 0 1 auto; min-width: 0; max-width: 130px; height: 22px; padding: 0 9px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 20px; display: block;
       border: 1px solid var(--line); border-radius: 999px; font-size: 12px; font-weight: 500;
     }
     /* Same calm buttons as the popup: ink primary, white secondary */
@@ -220,7 +220,7 @@
       el('div', { className: 'card-name' },
         dot(client.color),
         el('span', { className: 'grow' }, client.name),
-        el('span', { className: 'tag' }, t.task),
+        el('span', { className: 'tag' }, data.formatTasks(t)),
       ),
       clock('big-clock'),
       el('div', { className: 'btns' },

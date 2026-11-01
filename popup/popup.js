@@ -94,6 +94,80 @@ function periodNav({ title, sub = '', noun, onStep, canGoNext }) {
   );
 }
 
+// A dropdown of task checkboxes: tick the ones that apply.
+//   look: 'field' (full-width, in forms) or 'tag' (the small tag on the timer card)
+//   onChange(list): after every tick (forms keep the list in a variable)
+//   onClose(list):  when the menu closes, only if something changed (the timer saves then)
+// At least one task always stays ticked. The element has getTasks() for forms.
+function taskDropdown(selected, { look = 'field', onChange = null, onClose = null } = {}) {
+  let chosen = [...selected];
+  let startedWith = [...selected];
+  const wrap = el('div', { className: `task-dd look-${look}` });
+  const button = el('button', {
+    type: 'button',
+    className: look === 'tag' ? 'tag tag-button' : 'input dd-trigger',
+    ariaHasPopup: 'true',
+    ariaExpanded: 'false',
+    title: 'Choose tasks',
+  });
+  const menu = el('div', { className: 'dd-menu', role: 'menu', hidden: true });
+
+  const drawButton = () => button.replaceChildren(el('span', { className: 'grow' }, chosen.join(', ')), icon('caret', 13));
+
+  function drawMenu() {
+    menu.replaceChildren(
+      ...data.TASK_GROUPS.flatMap(([group, tasks]) => [
+        el('div', { className: 'dd-group' }, group),
+        ...tasks.map((task) => {
+          const on = chosen.includes(task);
+          return el('button', {
+            type: 'button',
+            className: 'dd-option',
+            role: 'menuitemcheckbox',
+            ariaChecked: String(on),
+            onclick: () => {
+              if (on && chosen.length === 1) return; // keep at least one
+              chosen = on ? chosen.filter((t) => t !== task) : data.TASKS.filter((t) => t === task || chosen.includes(t));
+              drawMenu();
+              drawButton();
+              if (onChange) onChange(chosen);
+            },
+          }, el('span', { className: 'checkbox' }, on ? icon('check', 12) : null), task);
+        }),
+      ]),
+      el('button', { type: 'button', className: 'btn btn-primary btn-sm dd-done', onclick: () => close() }, 'Done'),
+    );
+  }
+
+  // Clicking anywhere else, or pressing Escape, closes it
+  const outside = (e) => { if (!wrap.contains(e.target)) close(); };
+  const escape = (e) => { if (e.key === 'Escape') close(); };
+
+  function open() {
+    startedWith = [...chosen];
+    drawMenu();
+    menu.hidden = false;
+    button.ariaExpanded = 'true';
+    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('keydown', escape);
+  }
+
+  function close() {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    button.ariaExpanded = 'false';
+    document.removeEventListener('pointerdown', outside, true);
+    document.removeEventListener('keydown', escape);
+    if (onClose && chosen.join() !== startedWith.join()) onClose(chosen);
+  }
+
+  button.addEventListener('click', () => (menu.hidden ? open() : close()));
+  drawButton();
+  wrap.append(button, menu);
+  wrap.getTasks = () => chosen;
+  return wrap;
+}
+
 // A button with an icon in front: iconButton('btn btn-primary', 'play', 'Start timer', onclick)
 function iconButton(className, iconName, label, onclick, iconClass = '') {
   return el('button', { className, onclick }, icon(iconName, 15, iconClass), label);
@@ -255,10 +329,10 @@ function timerCard() {
     const main = canContinue
       ? el('button', {
         className: 'btn btn-primary btn-block btn-continue',
-        onclick: () => actThenClose(() => data.startTimer({ clientId: last.clientId, task: last.task, note: last.note })),
+        onclick: () => actThenClose(() => data.startTimer({ clientId: last.clientId, tasks: data.tasksOf(last), note: last.note })),
       },
         icon('play', 15, 'go'),
-        el('span', { className: 'grow' }, el('strong', {}, 'Continue '), `${lastClient.name} · ${last.task}`),
+        el('span', { className: 'grow' }, el('strong', {}, 'Continue '), `${lastClient.name} · ${data.formatTasks(last)}`),
         icon('chevron', 14),
       )
       : iconButton('btn btn-primary btn-block', 'play', 'Start timer', () => go('start'), 'go');
@@ -289,13 +363,13 @@ function timerCard() {
       el('span', { className: 'client-name grow' }, client.name),
       switchButton,
     ),
-    // Status, task, and note on one line
+    // Status, tasks (tap to change), and note on one line
     el('div', { className: 'card-top' },
       el('span', { className: `status-pill ${running ? 'running' : 'paused'}` },
         el('span', { className: running ? 'live-dot' : 'pause-dot' }),
         running ? 'Running' : 'Paused',
       ),
-      el('span', { className: 'tag' }, t.task),
+      taskDropdown(data.tasksOf(t), { look: 'tag', onClose: (tasks) => act(() => data.setTimerTasks(tasks)) }),
       t.note ? el('span', { className: 'small muted grow', title: t.note }, t.note) : null,
     ),
     el('div', { className: 'card-clock' }, bigClock()),
@@ -369,9 +443,10 @@ function startScreen({ clientId: chosen } = {}) {
   const clients = data.activeClients(state);
   const valid = (id) => clients.some((c) => c.id === id);
   let clientId = valid(chosen) ? chosen : valid(state.lastClientId) ? state.lastClientId : clients[0].id;
-  // Preselect the task you last did for this client (or anyone, if they're new)
+  // Preselect the tasks you last did for this client (or anyone, if they're new)
   const last = data.lastEntryFor(state, clientId) || data.lastEntry(state);
-  let task = last && data.TASKS.includes(last.task) ? last.task : data.TASKS[0];
+  let tasks = last ? data.tasksOf(last).filter((t) => data.TASKS.includes(t)) : [];
+  if (tasks.length === 0) tasks = [data.TASKS[0]];
 
   const clientRows = el('div', { className: 'list' });
   const chips = el('div', { className: 'task-groups' });
@@ -386,14 +461,19 @@ function startScreen({ clientId: chosen } = {}) {
         c.id === clientId ? icon('check', 15, 'check') : null,
       ),
     ));
-    chips.replaceChildren(...data.TASK_GROUPS.map(([group, tasks]) =>
+    chips.replaceChildren(...data.TASK_GROUPS.map(([group, groupTasks]) =>
       el('div', { className: 'task-group' },
         el('span', { className: 'group-name' }, group),
-        el('div', { className: 'chips' }, ...tasks.map((name) =>
+        el('div', { className: 'chips' }, ...groupTasks.map((name) =>
           el('button', {
             className: 'chip',
-            ariaPressed: String(name === task),
-            onclick: () => { task = name; update(); },
+            ariaPressed: String(tasks.includes(name)),
+            // Tap to add or remove; at least one stays picked
+            onclick: () => {
+              if (tasks.includes(name)) { if (tasks.length > 1) tasks = tasks.filter((t) => t !== name); }
+              else tasks = data.TASKS.filter((t) => t === name || tasks.includes(t));
+              update();
+            },
           }, name),
         )),
       ),
@@ -402,7 +482,7 @@ function startScreen({ clientId: chosen } = {}) {
   update();
 
   const start = () => actThenClose(
-    () => data.startTimer({ clientId, task, note: noteInput.value.trim() }),
+    () => data.startTimer({ clientId, tasks, note: noteInput.value.trim() }),
   );
   noteInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') start(); });
 
@@ -412,7 +492,7 @@ function startScreen({ clientId: chosen } = {}) {
     body: [
       sectionHead('Client'),
       clientRows,
-      sectionHead('Task'),
+      sectionHead('Tasks', 'Pick any that apply'),
       chips,
       field('Note (optional)', noteInput),
     ],
@@ -432,7 +512,7 @@ function switchScreen() {
     title: 'Switch client',
     back: () => go('dashboard'),
     body: [
-      el('p', { className: 'small muted' }, `Ends the entry for ${from.name} and starts a new one, keeping the task (${t.task}).`),
+      el('p', { className: 'small muted' }, `Ends the entry for ${from.name} and starts a new one, keeping the tasks (${data.formatTasks(t)}).`),
       list(others.map((c) =>
         el('button', { className: 'row', onclick: () => actThenClose(() => data.switchClient(c.id)) },
           dot(c.color),
@@ -544,7 +624,7 @@ function entryRow(e) {
   const client = data.findClient(state, e.clientId);
   return el('button', { className: 'row', onclick: () => go('entry', { id: e.id }) },
     dot(client.color),
-    el('span', { className: 'grow' }, `${client.name} · `, el('span', { className: 'muted' }, e.task)),
+    el('span', { className: 'grow' }, `${client.name} · `, el('span', { className: 'muted' }, data.formatTasks(e))),
     el('span', { className: 'meta' }, data.formatShortDuration(data.entryMs(e))),
     icon('chevron', 14, 'chev'),
   );
@@ -711,14 +791,8 @@ function entryForm(entry, day = null) {
   if (!entry) clientOptions.unshift(['', 'Choose client']);
   const clientSel = select(clientOptions, entry ? entry.clientId : '');
 
-  // Task dropdown in the same groups as the Start timer chips
-  const selectedTask = entry ? entry.task : 'Other';
-  const taskSel = el('select', { className: 'input' }, ...data.TASK_GROUPS.map(([group, tasks]) =>
-    el('optgroup', { label: group }, ...tasks.map((t) => el('option', { value: t, selected: t === selectedTask }, t))),
-  ));
-  if (!data.TASKS.includes(selectedTask)) {
-    taskSel.append(el('option', { value: selectedTask, selected: true }, selectedTask)); // an old tag no longer in the list
-  }
+  // Tasks: a checkbox dropdown, in the same groups as the Start timer chips
+  const taskPicker = taskDropdown(entry ? data.tasksOf(entry) : ['Other']);
 
   // Past time defaults to the hour that just ended, on the quarter hour
   const now = Date.now();
@@ -733,7 +807,7 @@ function entryForm(entry, day = null) {
 
   const values = () => ({
     clientId: clientSel.value,
-    task: taskSel.value,
+    tasks: taskPicker.getTasks(),
     note: noteInput.value.trim(),
     ...data.timesFromInputs(dateInput.value, startInput.value, endInput.value),
   });
@@ -752,7 +826,7 @@ function entryForm(entry, day = null) {
 
   const fields = el('div', { className: 'stack' },
     field('Client', clientSel),
-    field('Task', taskSel),
+    el('div', { className: 'field' }, el('span', {}, 'Tasks'), taskPicker),
     field('Date', dateInput),
     el('div', { className: 'pair' }, field('Start', startInput), field('End', endInput)),
     el('div', { className: 'duration' }, el('span', { className: 'label' }, 'Duration'), duration),
@@ -855,7 +929,7 @@ function statsScreen() {
         const client = data.findClient(state, g.key);
         return { name: client.name, color: data.colorHex(client.color), value: data.formatMoney(g.amount, 0) };
       }),
-      ...breakdown('By task', data.groupPieces(pieces, (p) => p.task).sort((a, b) => b.ms - a.ms), total, 'ms', (g) => (
+      ...breakdown('By task', data.groupPieces(data.splitByTask(pieces), (p) => p.task).sort((a, b) => b.ms - a.ms), total, 'ms', (g) => (
         { name: g.key, color: null, value: data.formatHours(g.ms) }
       )),
     ],

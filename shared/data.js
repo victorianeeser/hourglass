@@ -4,8 +4,9 @@
 //
 // Everything lives in chrome.storage.local:
 //   clients:      [{ id, name, color, rate, note, archived? }]
-//   entries:      [{ id, clientId, task, note, start, end, rate }]   (times are ms timestamps)
-//   timer:        null, or { status: 'running' | 'paused', clientId, task, note, start, carriedMs }
+//   entries:      [{ id, clientId, tasks, note, start, end, rate }]   (times are ms timestamps)
+//   timer:        null, or { status: 'running' | 'paused', clientId, tasks, note, start, carriedMs }
+//   (tasks is a list, e.g. ['Photoshop', 'Figma']. Older data has a single `task`; use tasksOf().)
 //   lastClientId: the client used most recently (preselected next time)
 //   theme:        'light', 'dark', or null to follow the computer's setting
 //
@@ -13,7 +14,7 @@
 // "now - start", so it stays correct even if Chrome puts the extension to sleep.
 //
 // Pausing closes the current stretch of time as a finished entry.
-// Resuming starts a new stretch for the same client, task and note.
+// Resuming starts a new stretch for the same client, tasks and note.
 // That keeps every entry a simple start → end with no hidden pause time.
 // `carriedMs` remembers the earlier stretches so the clock can show the
 // whole session (e.g. 0:40 before a pause + 0:05 after = 0:45).
@@ -56,6 +57,17 @@ const DEFAULTS = { clients: [], entries: [], timer: null, lastClientId: null, th
 function newId() {
   if (crypto.randomUUID) return crypto.randomUUID();
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+// The tasks on an entry or timer. Older data stored one `task`; newer stores `tasks`.
+export function tasksOf(item) {
+  if (item.tasks && item.tasks.length) return item.tasks;
+  return item.task ? [item.task] : ['Other'];
+}
+
+// "Photoshop, Figma"
+export function formatTasks(item) {
+  return tasksOf(item).join(', ');
 }
 
 // ---------- Reading ----------
@@ -118,7 +130,7 @@ function closeRunningStretch(state, now) {
   state.entries.push({
     id: newId(),
     clientId: t.clientId,
-    task: t.task,
+    tasks: tasksOf(t),
     note: t.note,
     start: t.start,
     end: now,
@@ -135,11 +147,11 @@ async function saveTimerState(state) {
   });
 }
 
-export async function startTimer({ clientId, task, note }) {
+export async function startTimer({ clientId, tasks, note }) {
   const state = await getState();
   const now = Date.now();
   closeRunningStretch(state, now); // one timer at a time
-  state.timer = { status: 'running', clientId, task, note, start: now, carriedMs: 0 };
+  state.timer = { status: 'running', clientId, tasks, note, start: now, carriedMs: 0 };
   state.lastClientId = clientId;
   await saveTimerState(state);
 }
@@ -164,6 +176,16 @@ export async function resumeTimer() {
   await saveTimerState(state);
 }
 
+// Change which tasks the running (or paused) timer is tagged with.
+// It's still one piece of work for the same client, so the clock keeps going.
+export async function setTimerTasks(tasks) {
+  const state = await getState();
+  if (!state.timer || tasks.length === 0) return;
+  state.timer = { ...state.timer, tasks };
+  delete state.timer.task;
+  await saveTimerState(state);
+}
+
 export async function stopTimer() {
   const state = await getState();
   if (!state.timer) return;
@@ -173,7 +195,7 @@ export async function stopTimer() {
 }
 
 // Ends the current entry and starts a new one for another client, in one step.
-// The task carries over; the note is cleared because it was about the old client.
+// The tasks carry over; the note is cleared because it was about the old client.
 export async function switchClient(clientId) {
   const state = await getState();
   if (!state.timer) return;
@@ -182,7 +204,7 @@ export async function switchClient(clientId) {
   state.timer = {
     status: 'running',
     clientId,
-    task: state.timer.task,
+    tasks: tasksOf(state.timer),
     note: '',
     start: now,
     carriedMs: 0,
@@ -320,15 +342,16 @@ export function formatDayLabel(timestamp, now = Date.now()) {
 
 function checkEntry(entry, state) {
   if (!findClient(state, entry.clientId)) throw new Error('Choose a client.');
+  if (!entry.tasks || entry.tasks.length === 0) throw new Error('Pick at least one task.');
   if (Number.isNaN(entry.start) || Number.isNaN(entry.end)) throw new Error('Enter a start and end time.');
   if (entry.end <= entry.start) throw new Error('End time must be after start time.');
   if (entry.end > Date.now() + 60000) throw new Error("That time hasn't happened yet.");
 }
 
 // For work done away from the computer (sketching, calls)
-export async function addEntry({ clientId, task, note, start, end }) {
+export async function addEntry({ clientId, tasks, note, start, end }) {
   const state = await getState();
-  const entry = { id: newId(), clientId, task, note, start, end, rate: 0 };
+  const entry = { id: newId(), clientId, tasks, note, start, end, rate: 0 };
   checkEntry(entry, state);
   entry.rate = findClient(state, clientId).rate;
   state.entries.push(entry);
@@ -340,9 +363,12 @@ export async function updateEntry(id, changes) {
   const entry = state.entries.find((e) => e.id === id);
   if (!entry) throw new Error('That entry no longer exists.');
   const updated = { ...entry, ...changes };
+  if (!changes.tasks) updated.tasks = tasksOf(entry); // keep older single-task entries valid
   checkEntry(updated, state);
   // Moving work to another client bills it at that client's rate
   if (updated.clientId !== entry.clientId) updated.rate = findClient(state, updated.clientId).rate;
+  delete updated.task; // older entries had a single task; tasks replaces it
+  Object.keys(entry).forEach((k) => delete entry[k]);
   Object.assign(entry, updated);
   await chrome.storage.local.set({ entries: state.entries });
 }
@@ -417,26 +443,32 @@ export function dateRange(name, now = Date.now()) {
 // including the stretch that is running right now.
 export function piecesBetween(state, from, to, now = Date.now()) {
   const pieces = [];
-  const add = (start, end, rate, clientId, task) => {
+  const add = (start, end, rate, clientId, tasks) => {
     const s = Math.max(start, from);
     const e = Math.min(end, to);
     if (e <= s) return;
-    pieces.push({ clientId, task, start: s, ms: e - s, amount: ((e - s) / 3600000) * rate });
+    pieces.push({ clientId, tasks, start: s, ms: e - s, amount: ((e - s) / 3600000) * rate });
   };
-  for (const e of state.entries) add(e.start, e.end, e.rate, e.clientId, e.task);
+  for (const e of state.entries) add(e.start, e.end, e.rate, e.clientId, tasksOf(e));
   const t = state.timer;
   if (t && t.status === 'running') {
     const client = findClient(state, t.clientId);
-    add(t.start, now, client ? client.rate : 0, t.clientId, t.task);
+    add(t.start, now, client ? client.rate : 0, t.clientId, tasksOf(t));
   }
   return pieces;
+}
+
+// For "By task": a piece tagged with several tasks is shared evenly between them,
+// so the task totals still add up to the real time worked.
+export function splitByTask(pieces) {
+  return pieces.flatMap((p) => p.tasks.map((task) => ({ ...p, task, ms: p.ms / p.tasks.length, amount: p.amount / p.tasks.length })));
 }
 
 export function sumPieces(pieces) {
   return pieces.reduce((sum, p) => ({ ms: sum.ms + p.ms, amount: sum.amount + p.amount }), { ms: 0, amount: 0 });
 }
 
-// Totals per client, task, or day: groupPieces(pieces, (p) => p.task) → [{ key, ms, amount }], biggest first
+// Totals per client or day: groupPieces(pieces, (p) => p.clientId) → [{ key, ms, amount }], biggest first
 export function groupPieces(pieces, keyOf) {
   const groups = new Map();
   for (const p of pieces) {
@@ -514,13 +546,13 @@ function csvCell(value) {
 
 // One row per entry, oldest first, ready for a spreadsheet or invoice
 export function entriesToCsv(state, entries) {
-  const header = ['Date', 'Client', 'Task', 'Note', 'Start', 'End', 'Hours', 'Rate', 'Amount'];
+  const header = ['Date', 'Client', 'Tasks', 'Note', 'Start', 'End', 'Hours', 'Rate', 'Amount'];
   const rows = [...entries].sort((a, b) => a.start - b.start).map((e) => {
     const client = findClient(state, e.clientId);
     return [
       toDateInput(e.start),
       client ? client.name : '',
-      e.task,
+      tasksOf(e).join(', '),
       e.note || '',
       toTimeInput(e.start),
       toTimeInput(e.end),

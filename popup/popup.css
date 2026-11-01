@@ -445,6 +445,63 @@ button.row:hover { background: var(--hover); }
   font-weight: 500;
 }
 
+/* Task dropdown: tick the tasks that apply */
+.task-dd { position: relative; min-width: 0; }
+.task-dd.look-tag { flex: 0 1 auto; }
+.dd-trigger { width: 100%; display: flex; align-items: center; gap: 6px; text-align: left; }
+.dd-trigger .icon, .tag-button .icon { opacity: 0.6; }
+.tag-button { max-width: 190px; gap: 3px; padding-right: 6px; transition: background-color 120ms; }
+.tag-button:hover { background: var(--hover); }
+.card.live .tag-button:hover { background: rgba(255, 255, 255, 0.16); }
+.dd-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  width: 220px;
+  max-height: 332px;
+  overflow-y: auto;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.task-dd.look-field .dd-menu { width: 100%; }
+.dd-menu[hidden] { display: none; }
+.dd-group { padding: 5px 8px 1px; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-variation-settings: 'opsz' 9; }
+.dd-option {
+  width: 100%;
+  min-height: 26px;
+  flex: none;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+}
+.dd-option:hover { background: var(--hover); }
+.checkbox {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--on-ink);
+}
+.dd-option[aria-checked="true"] { font-weight: 600; }
+.dd-option[aria-checked="true"] .checkbox { background: var(--ink); border-color: var(--ink); }
+.dd-done { flex: none; margin-top: 4px; }
+
 .task-groups { display: flex; flex-direction: column; gap: 10px; }
 .task-group { display: flex; flex-direction: column; gap: 6px; }
 .group-name { font-size: 11px; font-weight: 600; color: var(--muted); }
