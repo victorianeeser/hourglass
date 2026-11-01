@@ -29,10 +29,19 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
+// DM Sans has no equal-width ("tabular") numbers, so a ticking clock would
+// jiggle. Putting each digit in its own fixed-width box keeps it still.
+function setDigits(node, text) {
+  node.replaceChildren(...[...text].map((ch) => (/\d/.test(ch) ? el('span', { className: 'd' }, ch) : ch)));
+}
+
 // Text that keeps itself up to date, e.g. the running clock.
-function liveText(getText, props = {}) {
-  const node = el('span', props, getText());
-  liveTexts.push({ node, getText });
+// `digits: true` uses the fixed-width digit boxes above.
+function liveText(getText, props = {}, { digits = false } = {}) {
+  const node = el('span', props);
+  const update = (text) => (digits ? setDigits(node, text) : (node.textContent = text));
+  update(getText());
+  liveTexts.push({ getText, update });
   return node;
 }
 
@@ -162,7 +171,10 @@ function bigClock() {
     const [h, m, s] = data.formatDuration(data.sessionMs(state.timer)).split(':');
     return which === 'main' ? `${h}:${m}` : `:${s}`;
   };
-  return el('span', { className: 'clock' }, liveText(part('main')), liveText(part('seconds'), { className: 'seconds' }));
+  return el('span', { className: 'clock display-num' },
+    liveText(part('main'), {}, { digits: true }),
+    liveText(part('seconds'), { className: 'seconds' }, { digits: true }),
+  );
 }
 
 // The frame every screen shares: header bar, error line, scrolling body, action bar.
@@ -297,7 +309,7 @@ function timerCard() {
 }
 
 // Money first (that's what this is for), hours underneath.
-// The week tile has a little Mon–Sun bar chart, today in ink.
+// The week tile has a little Sun–Sat bar chart, today in ink.
 function totals() {
   const today = () => data.workedBetween(state, data.startOfToday(), Infinity);
   const week = () => data.workedBetween(state, data.startOfWeek(), Infinity);
@@ -321,13 +333,13 @@ function totals() {
   return el('div', { className: 'totals' },
     el('button', { className: 'total', onclick: openStats, title: 'See stats' },
       el('span', { className: 'label' }, 'Today'),
-      liveText(() => data.formatMoney(today().amount), { className: 'total-value' }),
+      liveText(() => data.formatMoney(today().amount), { className: 'total-value display-num' }, { digits: true }),
       liveText(() => data.formatHours(today().ms), { className: 'total-sub' }),
     ),
     el('button', { className: 'total', onclick: openStats, title: 'See stats' },
       el('span', { className: 'label' }, 'This week'),
       bars, // pinned to the corner so both tiles line up
-      liveText(() => data.formatMoney(week().amount, 0), { className: 'total-value' }),
+      liveText(() => data.formatMoney(week().amount, 0), { className: 'total-value display-num' }, { digits: true }),
       liveText(() => data.formatHours(week().ms), { className: 'total-sub' }),
     ),
   );
@@ -572,10 +584,10 @@ function calendarView() {
 
   const cells = new Map(); // day → its button, to move the "selected" ring
   const grid = el('div', { className: 'cal' },
-    ...['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => el('span', { className: 'cal-weekday' }, d)),
+    ...['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => el('span', { className: 'cal-weekday' }, d)),
   );
-  // Blank cells so the 1st lands under the right weekday (weeks start Monday)
-  const blanks = (new Date(calendarMonth).getDay() + 6) % 7;
+  // Blank cells so the 1st lands under the right weekday (weeks start Sunday)
+  const blanks = new Date(calendarMonth).getDay();
   for (let i = 0; i < blanks; i++) grid.append(el('span'));
 
   for (let day = calendarMonth; day < monthEnd; day = data.addDays(day, 1)) {
@@ -827,7 +839,7 @@ function statsScreen() {
       el('div', { className: 'card' },
         el('div', {},
           el('div', { className: 'label' }, 'Billed'),
-          el('div', { className: 'stat-total' }, data.formatMoney(total.amount)),
+          el('div', { className: 'stat-total display-num' }, data.formatMoney(total.amount)),
         ),
         el('div', { className: 'stat-sub' }, el('span', { className: 'small muted num' }, `${data.formatHours(total.ms)} tracked`), compare),
         barChart(period, pieces, now),
@@ -939,7 +951,7 @@ function exportScreen() {
   const toInput = el('input', { className: 'input', type: 'date', value: today, max: today });
   const customDates = el('div', { className: 'pair', hidden: true }, field('From', fromInput), field('To', toInput));
 
-  const count = el('div', { className: 'preview-count num' });
+  const count = el('div', { className: 'preview-count display-num' });
   const totals = el('div', { className: 'small muted num' });
   const download = el('button', { className: 'btn btn-primary btn-block' }, icon('download', 15), 'Download CSV');
 
@@ -1023,7 +1035,7 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
 });
 
 setInterval(() => {
-  for (const { node, getText } of liveTexts) node.textContent = getText();
+  for (const { getText, update } of liveTexts) update(getText());
 }, 1000);
 
 state = await data.getState();

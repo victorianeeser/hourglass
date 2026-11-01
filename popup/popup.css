@@ -132,13 +132,21 @@ button { cursor: pointer; }
   min-width: 0;
   margin: 0;
   font-size: 15px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variation-settings: 'opsz' 24;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.header h1.wordmark { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+/* The wordmark: display cut, extra bold, with DM Sans's alternate u for a custom feel */
+.header h1.wordmark {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-variation-settings: 'opsz' 40;
+  font-feature-settings: 'ss04';
+}
 .header .icon-btn:first-child { margin-left: -6px; }
 
 .screen-body {
@@ -242,7 +250,8 @@ button { cursor: pointer; }
 .label {
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
+  font-variation-settings: 'opsz' 9;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -251,6 +260,19 @@ button { cursor: pointer; }
 .small { font-size: 12px; margin: 0; }
 .num { font-variant-numeric: tabular-nums; }
 .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* DM Sans is a variable font with an optical-size axis (9–40): small text gets
+   the sturdier small cut, big text the sharper display cut. */
+
+/* Big numbers (clock, money): display cut, alternate numerals with a flagged 1, tight */
+.display-num {
+  font-variation-settings: 'opsz' 40;
+  font-feature-settings: 'ss07';
+  letter-spacing: -0.04em;
+}
+/* Each digit in its own equal box, since DM Sans has no tabular figures (see setDigits) */
+.d { display: inline-block; width: 0.62em; text-align: center; letter-spacing: 0; }
+
 
 /* ---------- Buttons ---------- */
 
@@ -389,7 +411,7 @@ button.row:hover { background: var(--hover); }
 /* Period header: "October 2026   ‹ ›" */
 .period-nav { flex: none; display: flex; align-items: center; gap: 6px; }
 .period-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
-.period-title strong { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+.period-title strong { font-size: 15px; font-weight: 750; letter-spacing: -0.025em; font-variation-settings: 'opsz' 24; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
@@ -472,9 +494,9 @@ select.input {
 /* ---------- Timer card (dashboard) ---------- */
 
 .card-top, .card-clock { display: flex; align-items: center; gap: 8px; }
-.client-name { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+.client-name { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; font-variation-settings: 'opsz' 24; }
 
-.clock { flex: 1; font-size: 32px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.clock { flex: 1; font-size: 34px; font-weight: 650; line-height: 1.05; }
 .clock .seconds { opacity: 0.4; font-weight: 500; } /* hours:minutes lead, seconds just tick along */
 
 .card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -539,10 +561,10 @@ select.input {
 /* The tiles open Stats */
 .total:hover { border-color: var(--line-strong); box-shadow: 0 6px 14px -10px rgba(22, 20, 18, 0.35); }
 .total .week-bars { position: absolute; top: 11px; right: 12px; }
-.total-value { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.total-value { font-size: 21px; font-weight: 700; }
 .total-sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-/* Mon–Sun mini chart in the This week tile */
+/* Sun–Sat mini chart in the This week tile */
 .week-bars { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
 .bar { width: 5px; height: var(--h); border-radius: 1.5px; background: var(--line-strong); }
 .bar.today { background: var(--ink); }
@@ -567,7 +589,7 @@ select.input {
   box-shadow: var(--shadow-md);
 }
 .empty-circle img { height: 26px; filter: var(--logo-filter); animation: flip 6s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
-.empty h2 { margin: 6px 0 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.empty h2 { margin: 6px 0 0; font-size: 17px; font-weight: 750; letter-spacing: -0.03em; font-variation-settings: 'opsz' 32; }
 .empty p { margin: 0 0 6px; color: var(--muted); }
 
 /* ---------- Entries: month calendar ---------- */
@@ -604,7 +626,7 @@ select.input {
 
 /* ---------- Stats ---------- */
 
-.stat-total { font-size: 30px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat-total { font-size: 32px; font-weight: 750; line-height: 1.05; }
 .stat-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* "↑ 27% vs same time last week": neutral, since green and red are status colors */
@@ -681,7 +703,7 @@ select.input {
 
 /* ---------- Export ---------- */
 
-.preview-count { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.preview-count { font-size: 20px; font-weight: 750; }
 
 /* ---------- Dark mode extras ---------- */
 

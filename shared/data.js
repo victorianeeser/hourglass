@@ -237,11 +237,10 @@ export function startOfToday(now = Date.now()) {
   return d.getTime();
 }
 
-// Midnight on Monday of this week
+// Midnight on Sunday of this week (weeks run Sunday to Saturday)
 export function startOfWeek(now = Date.now()) {
   const d = new Date(startOfToday(now));
-  const daysSinceMonday = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - daysSinceMonday);
+  d.setDate(d.getDate() - d.getDay()); // getDay() is 0 on Sunday
   return d.getTime();
 }
 
@@ -477,7 +476,7 @@ export function statsPeriod(kind, offset = 0, now = Date.now()) {
   const to = addDays(from, 7);
   const buckets = Array.from({ length: 7 }, (_, i) => {
     const day = addDays(from, i);
-    return { from: day, to: addDays(day, 1), axis: 'MTWTFSS'[i], name: short(day, { weekday: 'short', month: 'short', day: 'numeric' }) };
+    return { from: day, to: addDays(day, 1), axis: 'SMTWTFS'[i], name: short(day, { weekday: 'short', month: 'short', day: 'numeric' }) };
   });
   const last = addDays(to, -1);
   return { from, to, label: `${short(from, { month: 'short', day: 'numeric' })} – ${short(last, { month: 'short', day: 'numeric' })}`, buckets };

@@ -46,7 +46,8 @@
     }
     .pill.paused { background: var(--paper); color: var(--ink); border: 1px solid var(--line); }
     .name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .clock { flex: none; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .clock { flex: none; font-weight: 600; font-feature-settings: 'ss07'; }
+    .d { display: inline-block; width: 0.62em; text-align: center; }
     .status { flex: none; font-size: 12px; color: var(--muted); }
     .icon {
       flex: none; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%;
@@ -65,7 +66,8 @@
     }
     .card[hidden] { display: none; }
     .card-name { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
-    .big-clock { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+    .big-clock { font-size: 30px; font-weight: 650; letter-spacing: -0.04em; font-variation-settings: 'opsz' 40; font-feature-settings: 'ss07'; }
+    .big-clock .d { letter-spacing: 0; }
     .tag {
       flex: none; height: 22px; padding: 0 9px;
       display: inline-flex; align-items: center;
@@ -147,8 +149,14 @@
     return el('span', { className: 'dot', style: `background: ${data.colorHex(color)}` });
   }
 
+  // DM Sans has no equal-width numbers, so each digit gets its own box (no jiggle)
+  function setDigits(node, text) {
+    node.replaceChildren(...[...text].map((ch) => (/\d/.test(ch) ? el('span', { className: 'd' }, ch) : ch)));
+  }
+
   function clock(className) {
-    const node = el('span', { className }, data.formatDuration(data.sessionMs(state.timer)));
+    const node = el('span', { className });
+    setDigits(node, data.formatDuration(data.sessionMs(state.timer)));
     clocks.push(node);
     return node;
   }
@@ -272,7 +280,7 @@
     if (!state || !state.timer) return;
     if (!host.isConnected) document.documentElement.append(host); // some sites rebuild the page
     const text = data.formatDuration(data.sessionMs(state.timer));
-    for (const node of clocks) node.textContent = text;
+    for (const node of clocks) setDigits(node, text);
   }, 1000);
 
   state = await data.getState();
