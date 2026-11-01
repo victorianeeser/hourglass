@@ -7,6 +7,7 @@
 //   entries:      [{ id, clientId, task, note, start, end, rate }]   (times are ms timestamps)
 //   timer:        null, or { status: 'running' | 'paused', clientId, task, note, start, carriedMs }
 //   lastClientId: the client used most recently (preselected next time)
+//   theme:        'light', 'dark', or null to follow the computer's setting
 //
 // We store timestamps, never a running count: elapsed time is always
 // "now - start", so it stays correct even if Chrome puts the extension to sleep.
@@ -49,7 +50,7 @@ export function colorHex(name) {
   return CLIENT_COLORS[name] || CLIENT_COLORS[COLOR_ALIASES[name]] || '#6E6862';
 }
 
-const DEFAULTS = { clients: [], entries: [], timer: null, lastClientId: null };
+const DEFAULTS = { clients: [], entries: [], timer: null, lastClientId: null, theme: null };
 
 // crypto.randomUUID only exists on https pages, and the pill also runs on plain http pages.
 function newId() {
@@ -70,6 +71,12 @@ export function activeClients(state) {
 
 export function findClient(state, id) {
   return state.clients.find((c) => c.id === id);
+}
+
+// ---------- Settings ----------
+
+export async function setTheme(theme) {
+  await chrome.storage.local.set({ theme });
 }
 
 // ---------- Clients ----------
