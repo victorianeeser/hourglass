@@ -14,8 +14,11 @@
   // DM Sans under its own name, so it can't clash with a site's own fonts
   try {
     const font = new FontFace('Hourglass DM Sans', `url(${chrome.runtime.getURL('fonts/DMSans-Variable.ttf')})`, { weight: '100 1000' });
-    document.fonts.add(font);
-    font.load().catch(() => {}); // if a site blocks it, the fallback font is used
+    const mono = new FontFace('Hourglass DM Mono', `url(${chrome.runtime.getURL('fonts/DMMono-Medium.ttf')})`, { weight: '500' });
+    for (const f of [font, mono]) {
+      document.fonts.add(f);
+      f.load().catch(() => {}); // if a site blocks it, the fallback font is used
+    }
   } catch (err) {
     // FontFace unavailable: fall back quietly
   }
@@ -46,8 +49,8 @@
     }
     .pill.paused { background: var(--paper); color: var(--ink); border: 1px solid var(--line); }
     .name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .clock { flex: none; font-weight: 600; font-feature-settings: 'ss07'; }
-    .d { display: inline-block; width: 0.62em; text-align: center; }
+    .clock { flex: none; font-family: 'Hourglass DM Mono', 'DM Mono', ui-monospace, monospace; font-weight: 500; }
+    .colon { font-family: 'Hourglass DM Sans', 'DM Sans', system-ui, sans-serif; font-weight: 650; margin: 0 0.02em; }
     .status { flex: none; font-size: 12px; color: var(--muted); }
     .icon {
       flex: none; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%;
@@ -66,8 +69,7 @@
     }
     .card[hidden] { display: none; }
     .card-name { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
-    .big-clock { font-size: 30px; font-weight: 650; letter-spacing: -0.04em; font-variation-settings: 'opsz' 40; font-feature-settings: 'ss07'; }
-    .big-clock .d { letter-spacing: 0; }
+    .big-clock { font-family: 'Hourglass DM Mono', 'DM Mono', ui-monospace, monospace; font-size: 30px; font-weight: 500; letter-spacing: -0.01em; }
     .tag {
       flex: 0 1 auto; min-width: 0; max-width: 130px; height: 22px; padding: 0 9px;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 20px; display: block;
@@ -149,14 +151,15 @@
     return el('span', { className: 'dot', style: `background: ${data.colorHex(color)}` });
   }
 
-  // DM Sans has no equal-width numbers, so each digit gets its own box (no jiggle)
-  function setDigits(node, text) {
-    node.replaceChildren(...[...text].map((ch) => (/\d/.test(ch) ? el('span', { className: 'd' }, ch) : ch)));
+  // Clocks use DM Mono digits (all the same width, so nothing shifts as it ticks)
+  // with DM Sans colons, same as the popup
+  function setClock(node, text) {
+    node.replaceChildren(...text.split(/(:)/).filter(Boolean).map((part) => (part === ':' ? el('span', { className: 'colon' }, ':') : part)));
   }
 
   function clock(className) {
     const node = el('span', { className });
-    setDigits(node, data.formatDuration(data.sessionMs(state.timer)));
+    setClock(node, data.formatDuration(data.sessionMs(state.timer)));
     clocks.push(node);
     return node;
   }
@@ -280,7 +283,7 @@
     if (!state || !state.timer) return;
     if (!host.isConnected) document.documentElement.append(host); // some sites rebuild the page
     const text = data.formatDuration(data.sessionMs(state.timer));
-    for (const node of clocks) setDigits(node, text);
+    for (const node of clocks) setClock(node, text);
   }, 1000);
 
   state = await data.getState();

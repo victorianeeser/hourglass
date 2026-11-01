@@ -30,7 +30,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["shared/data.js", "fonts/DMSans-Variable.ttf"],
+      "resources": ["shared/data.js", "fonts/DMSans-Variable.ttf", "fonts/DMMono-Medium.ttf"],
       "matches": ["<all_urls>"]
     }
   ],

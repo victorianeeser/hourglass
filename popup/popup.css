@@ -12,6 +12,13 @@
   font-weight: 100 1000;
   font-style: normal;
 }
+/* DM Mono (DM Sans's monospaced sibling), only for the running clock */
+@font-face {
+  font-family: 'DM Mono';
+  src: url('../fonts/DMMono-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+}
 
 :root {
   /* neutrals */
@@ -271,7 +278,7 @@ button { cursor: pointer; }
   letter-spacing: -0.04em;
 }
 /* Each digit in its own equal box, since DM Sans has no tabular figures (see setDigits) */
-.d { display: inline-block; width: 0.62em; text-align: center; letter-spacing: 0; }
+.d { display: inline-block; width: 0.66em; text-align: center; letter-spacing: 0; } /* wide enough that zeros don't touch */
 
 
 /* ---------- Buttons ---------- */
@@ -553,7 +560,10 @@ select.input {
 .card-top, .card-clock { display: flex; align-items: center; gap: 8px; }
 .client-name { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; font-variation-settings: 'opsz' 24; }
 
-.clock { flex: 1; font-size: 34px; font-weight: 650; line-height: 1.05; }
+/* The running clock: DM Mono digits (all the same width, so it never shifts),
+   DM Sans colons (DM Mono's are very wide) */
+.clock { flex: 1; font-family: 'DM Mono', monospace; font-size: 34px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.05; white-space: nowrap; }
+.clock .colon { font-family: 'DM Sans', sans-serif; font-weight: 650; margin: 0 0.02em; }
 .clock .seconds { opacity: 0.4; font-weight: 500; } /* hours:minutes lead, seconds just tick along */
 
 .card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

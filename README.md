@@ -23,4 +23,4 @@ Shortcut: **Option+Shift+H** (Mac) or **Alt+Shift+H** (Windows) opens the popup.
 - `icons/` — the logo, plus the toolbar and extension-page icons made from it
 - `shared/data.js` — all saving and loading (clients, entries, timer) plus totals math
 - `popup/` — the toolbar popup: `popup.js` draws one screen at a time, `popup.css` has the design
-- `fonts/` — DM Sans (Open Font License), bundled so the extension never goes online
+- `fonts/` — DM Sans, plus DM Mono for the running clock (both Open Font License), bundled so the extension never goes online

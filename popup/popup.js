@@ -35,11 +35,17 @@ function setDigits(node, text) {
   node.replaceChildren(...[...text].map((ch) => (/\d/.test(ch) ? el('span', { className: 'd' }, ch) : ch)));
 }
 
+// The running clock uses DM Mono, whose digits are all the same width, so
+// nothing shifts as it ticks. Its colons are wide, so they stay in DM Sans.
+function setClock(node, text) {
+  node.replaceChildren(...text.split(/(:)/).filter(Boolean).map((part) => (part === ':' ? el('span', { className: 'colon' }, ':') : part)));
+}
+
 // Text that keeps itself up to date, e.g. the running clock.
-// `digits: true` uses the fixed-width digit boxes above.
-function liveText(getText, props = {}, { digits = false } = {}) {
+// `digits: true` uses the fixed-width digit boxes above; `clock: true` uses setClock.
+function liveText(getText, props = {}, { digits = false, clock = false } = {}) {
   const node = el('span', props);
-  const update = (text) => (digits ? setDigits(node, text) : (node.textContent = text));
+  const update = (text) => (clock ? setClock(node, text) : digits ? setDigits(node, text) : (node.textContent = text));
   update(getText());
   liveTexts.push({ getText, update });
   return node;
@@ -245,9 +251,9 @@ function bigClock() {
     const [h, m, s] = data.formatDuration(data.sessionMs(state.timer)).split(':');
     return which === 'main' ? `${h}:${m}` : `:${s}`;
   };
-  return el('span', { className: 'clock display-num' },
-    liveText(part('main'), {}, { digits: true }),
-    liveText(part('seconds'), { className: 'seconds' }, { digits: true }),
+  return el('span', { className: 'clock' },
+    liveText(part('main'), {}, { clock: true }),
+    liveText(part('seconds'), { className: 'seconds' }, { clock: true }),
   );
 }
 
