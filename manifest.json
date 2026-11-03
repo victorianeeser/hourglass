@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Hourglass",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Manual billable-time tracker for freelance design work. All data stays on your computer.",
   "icons": {
     "16": "icons/icon16.png",
