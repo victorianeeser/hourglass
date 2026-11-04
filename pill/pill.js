@@ -48,6 +48,11 @@
       cursor: pointer; user-select: none;
     }
     .pill.paused { background: var(--paper); color: var(--ink); border: 1px solid var(--line); }
+    .pill.asking { max-width: none; padding-right: 8px; cursor: default; }
+    .question { white-space: nowrap; }
+    .answer { height: 26px; padding: 0 8px; border: 0; border-radius: 999px; background: none; color: rgba(255, 255, 255, 0.7); }
+    .answer:hover { background: rgba(255, 255, 255, 0.14); color: var(--on-ink); }
+    .answer.keep { font-weight: 700; color: var(--on-ink); }
     .name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .clock { flex: none; font-family: 'Hourglass DM Mono', 'DM Mono', ui-monospace, monospace; font-weight: 500; }
     .clock.over { color: var(--idle); }
@@ -197,6 +202,21 @@
     }
     if (!host.isConnected) document.documentElement.append(host);
 
+    // Back from being away: the pill asks, and the question replaces everything else
+    const away = data.awayPrompt(t);
+    if (away) {
+      open = false;
+      card.hidden = true;
+      pill.className = 'pill asking';
+      pill.ariaLabel = `Hourglass: you were away. Keep this time on ${client.name}?`;
+      pill.replaceChildren(
+        el('span', { className: 'question' }, `Away ${data.formatAway(away.until - away.since)} · still working?`),
+        el('button', { className: 'answer keep', title: `Keep this time on ${client.name}`, onclick: () => run(data.keepAwayTime) }, 'Keep'),
+        el('button', { className: 'answer', title: 'Remove this time', onclick: () => run(data.discardAwayTime) }, 'Discard'),
+      );
+      return;
+    }
+
     const running = t.status === 'running';
     const toggle = running ? data.pauseTimer : data.resumeTimer;
 
@@ -254,9 +274,9 @@
   }
 
   // Click or press Enter/Space on the pill to open or close the card
-  pill.addEventListener('click', () => setOpen(!open));
+  pill.addEventListener('click', () => { if (!pill.classList.contains('asking')) setOpen(!open); });
   pill.addEventListener('keydown', (e) => {
-    if (e.target === pill && (e.key === 'Enter' || e.key === ' ')) {
+    if (e.target === pill && !pill.classList.contains('asking') && (e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
       setOpen(!open);
     }

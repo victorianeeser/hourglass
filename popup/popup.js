@@ -355,16 +355,33 @@ function dashboardScreen() {
     // Order matters: the thing you do (start or control a timer) first,
     // then what it earned you, then where the week went.
     body: [
-      timerCard(),
+      // While the away question is open it takes the timer card's place,
+      // so you can't stop the timer and bill the away time by accident.
+      data.awayPrompt(state.timer) ? awayCard() : timerCard(),
       totals(),
       sectionHead('By client', 'This week'),
       byClientRows(),
     ],
-    footer: [
+    footer: data.awayPrompt(state.timer) ? null : [
       iconButton('btn btn-secondary btn-half', 'plus', 'Add past time', () => go('past', { from: 'dashboard' })),
       iconButton('btn btn-secondary btn-half', 'download', 'Export CSV', () => go('export')),
     ],
   });
+}
+
+// "You were away for 23 min. Keep this time on Bloom Florals?"
+function awayCard() {
+  const away = data.awayPrompt(state.timer);
+  const client = data.findClient(state, state.timer.clientId);
+  const length = data.formatAway(away.until - away.since);
+  return el('div', { className: 'card live away-card', role: 'alert' },
+    el('div', { className: 'client-name' }, `You were away for ${length}`),
+    el('p', { className: 'small muted' }, `Keep this time on ${client.name}?`),
+    el('div', { className: 'card-actions' },
+      el('button', { className: 'btn btn-on-dark', onclick: () => act(data.discardAwayTime) }, `Discard ${length}`),
+      el('button', { className: 'btn btn-light', onclick: () => act(data.keepAwayTime) }, 'Keep time'),
+    ),
+  );
 }
 
 function timerCard() {

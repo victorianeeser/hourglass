@@ -40,5 +40,5 @@
       "description": "Open Hourglass"
     }
   },
-  "permissions": ["storage", "alarms", "notifications"]
+  "permissions": ["storage", "alarms", "notifications", "idle"]
 }

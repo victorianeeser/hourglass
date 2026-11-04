@@ -9,6 +9,8 @@
 //   (tasks is a list, e.g. ['Photoshop', 'Figma']. Older data has a single `task`; use tasksOf().)
 //   (timer.targetMs, if set, makes the clock count down: it's the session time at which the
 //    countdown hits zero. timer.alerted means the "time's up" notification already went out.)
+//   (timer.away is { since, until } while you're away from the computer. `until` stays null
+//    until you're back; once set, Hourglass asks whether to keep or discard that time.)
 //   lastClientId: the client used most recently (preselected next time)
 //   theme:        'light', 'dark', or null to follow the computer's setting
 //
@@ -169,6 +171,7 @@ export async function pauseTimer() {
     status: 'paused',
     start: null,
     carriedMs: state.timer.carriedMs + length,
+    away: null,
   };
   await saveTimerState(state);
 }
@@ -188,6 +191,57 @@ export async function setTimerTasks(tasks) {
   state.timer = { ...state.timer, tasks };
   delete state.timer.task;
   await saveTimerState(state);
+}
+
+// ---------- Idle check ----------
+
+export const IDLE_MS = 5 * 60000; // this long away before Hourglass asks
+
+// You've gone away. Only a running timer needs watching, and only the first signal counts.
+export async function markAway(since) {
+  const { timer } = await getState();
+  if (!timer || timer.status !== 'running' || timer.away) return;
+  await chrome.storage.local.set({ timer: { ...timer, away: { since: Math.max(since, timer.start), until: null } } });
+}
+
+// You're back. Returns true if you were gone long enough to be asked.
+// Shorter absences (like locking your screen for a minute) are just forgotten.
+export async function markBack(now = Date.now()) {
+  const { timer } = await getState();
+  if (!timer || !timer.away || timer.away.until) return false;
+  const longEnough = now - timer.away.since >= IDLE_MS;
+  await chrome.storage.local.set({
+    timer: { ...timer, away: longEnough ? { ...timer.away, until: now } : null },
+  });
+  return longEnough;
+}
+
+// The question waiting to be answered, or null: { since, until }
+export function awayPrompt(timer) {
+  return timer && timer.away && timer.away.until ? timer.away : null;
+}
+
+export async function keepAwayTime() {
+  const { timer } = await getState();
+  if (awayPrompt(timer)) await chrome.storage.local.set({ timer: { ...timer, away: null } });
+}
+
+// Bills up to when you left, drops the away time, and carries on from when you came back.
+export async function discardAwayTime() {
+  const state = await getState();
+  const t = state.timer;
+  const away = awayPrompt(t);
+  if (!away) return;
+  const length = closeRunningStretch(state, away.since);
+  state.timer = { ...t, start: away.until, carriedMs: t.carriedMs + length, away: null };
+  if (isCountdown(state.timer) && remainingMs(state.timer) > 0) state.timer.alerted = false; // back under the countdown
+  await saveTimerState(state);
+}
+
+// 1380000 → "23 min", 3900000 → "1h 5m"
+export function formatAway(ms) {
+  const minutes = Math.floor(ms / 60000);
+  return minutes < 60 ? `${minutes} min` : formatHours(ms);
 }
 
 function checkMinutes(minutes) {

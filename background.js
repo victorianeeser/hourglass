@@ -4,6 +4,7 @@
 //   - the badge shows the time (e.g. 0:42): green while running, amber when paused or past zero
 //   - hovering the icon says who you're billing
 //   - a countdown reaching zero shows a Chrome notification; the timer keeps tracking
+//   - coming back after 5+ minutes away asks whether to keep or discard that time
 // It never starts or changes timers on its own (manual timers only).
 //
 // Chrome puts this worker to sleep when it's idle, so instead of a ticking
@@ -14,12 +15,14 @@ import * as data from './shared/data.js';
 
 const BADGE_ALARM = 'badge-tick';
 const COUNTDOWN_ALARM = 'countdown-done';
+const AWAY_NOTIFICATION = 'hourglass-away';
 
 async function updateBadge() {
   const state = await data.getState();
   const t = state.timer;
   await chrome.alarms.clear(BADGE_ALARM);
   await chrome.alarms.clear(COUNTDOWN_ALARM);
+  if (!data.awayPrompt(t)) chrome.notifications.clear(AWAY_NOTIFICATION); // answered somewhere else
 
   if (!t) {
     await chrome.action.setBadgeText({ text: '' });
@@ -31,7 +34,7 @@ async function updateBadge() {
   const ms = data.sessionMs(t);
   const running = t.status === 'running';
 
-  const needsAttention = !running || data.isOvertime(t);
+  const needsAttention = !running || data.isOvertime(t) || Boolean(data.awayPrompt(t));
 
   await chrome.action.setBadgeText({ text: data.badgeText(t) });
   await chrome.action.setBadgeBackgroundColor({ color: needsAttention ? '#F2A93B' : '#3DBE6B' }); // --idle / --running
@@ -63,8 +66,51 @@ async function announceCountdownDone(client) {
   });
 }
 
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === BADGE_ALARM || alarm.name === COUNTDOWN_ALARM) updateBadge();
+// ---------- Idle check ----------
+// chrome.idle watches the whole computer, not just Chrome. It wakes this worker when
+// you've gone idle (no mouse or keyboard for 5 minutes), lock the screen, or return.
+
+const idleSeconds = data.IDLE_MS / 1000;
+chrome.idle.setDetectionInterval(idleSeconds);
+
+chrome.idle.onStateChanged.addListener(async (idleState) => {
+  const now = Date.now();
+  if (idleState === 'idle') await data.markAway(now - data.IDLE_MS); // you left 5 minutes ago
+  else if (idleState === 'locked') await data.markAway(now);
+  else if (await data.markBack(now)) await askAboutAwayTime();
+});
+
+// You're back: ask in a notification (the pill and popup show it too, from storage).
+async function askAboutAwayTime() {
+  const state = await data.getState();
+  const away = data.awayPrompt(state.timer);
+  const client = away && data.findClient(state, state.timer.clientId);
+  if (!client) return;
+  chrome.notifications.create(AWAY_NOTIFICATION, {
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+    title: `You were away for ${data.formatAway(away.until - away.since)}`,
+    message: `Keep this time on ${client.name}?`,
+    buttons: [{ title: 'Keep time' }, { title: 'Discard' }],
+    requireInteraction: true,
+  });
+}
+
+chrome.notifications.onButtonClicked.addListener((id, button) => {
+  if (id !== AWAY_NOTIFICATION) return;
+  chrome.notifications.clear(id);
+  if (button === 0) data.keepAwayTime();
+  else data.discardAwayTime();
+});
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== BADGE_ALARM && alarm.name !== COUNTDOWN_ALARM) return;
+  // An alarm this late means the computer was asleep, which chrome.idle can miss.
+  if (Date.now() - alarm.scheduledTime >= data.IDLE_MS) {
+    await data.markAway(alarm.scheduledTime);
+    if ((await chrome.idle.queryState(idleSeconds)) === 'active' && (await data.markBack())) await askAboutAwayTime();
+  }
+  updateBadge();
 });
 
 // Any change to the timer (from the popup, or later the pill) refreshes the badge.
