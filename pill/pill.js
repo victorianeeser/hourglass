@@ -50,6 +50,8 @@
     .pill.paused { background: var(--paper); color: var(--ink); border: 1px solid var(--line); }
     .name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .clock { flex: none; font-family: 'Hourglass DM Mono', 'DM Mono', ui-monospace, monospace; font-weight: 500; }
+    .clock.over { color: var(--idle); }
+    .big-clock.over, .paused .clock.over { color: #A3650F; }
     .colon { font-family: 'Hourglass DM Sans', 'DM Sans', system-ui, sans-serif; font-weight: 650; margin: 0 0.02em; }
     .status { flex: none; font-size: 12px; color: var(--muted); }
     .icon {
@@ -159,7 +161,8 @@
 
   function clock(className) {
     const node = el('span', { className });
-    setClock(node, data.formatDuration(data.sessionMs(state.timer)));
+    setClock(node, data.clockText(state.timer));
+    node.classList.toggle('over', data.isOvertime(state.timer));
     clocks.push(node);
     return node;
   }
@@ -282,8 +285,11 @@
     }
     if (!state || !state.timer) return;
     if (!host.isConnected) document.documentElement.append(host); // some sites rebuild the page
-    const text = data.formatDuration(data.sessionMs(state.timer));
-    for (const node of clocks) setClock(node, text);
+    const text = data.clockText(state.timer);
+    for (const node of clocks) {
+      setClock(node, text);
+      node.classList.toggle('over', data.isOvertime(state.timer));
+    }
   }, 1000);
 
   state = await data.getState();

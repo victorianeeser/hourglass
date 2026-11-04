@@ -247,14 +247,60 @@ function isRunning() {
 
 // The big clock: "0:42" in full strength, ":10" softer
 function bigClock() {
-  const part = (which) => () => {
-    const [h, m, s] = data.formatDuration(data.sessionMs(state.timer)).split(':');
-    return which === 'main' ? `${h}:${m}` : `:${s}`;
+  const main = el('span');
+  const seconds = el('span', { className: 'seconds' });
+  const clock = el('span', { className: 'clock' }, main, seconds);
+  const draw = () => {
+    const text = data.clockText(state.timer);
+    const cut = text.lastIndexOf(':');
+    setClock(main, text.slice(0, cut));
+    setClock(seconds, text.slice(cut));
+    clock.classList.toggle('over', data.isOvertime(state.timer));
   };
-  return el('span', { className: 'clock' },
-    liveText(part('main'), {}, { clock: true }),
-    liveText(part('seconds'), { className: 'seconds' }, { clock: true }),
+  draw();
+  liveTexts.push({ getText: () => null, update: draw });
+  return clock;
+}
+
+const COUNTDOWN_PRESETS = [[15, '15m'], [30, '30m'], [60, '1h'], [120, '2h']];
+
+// The button next to the clock: count up, or count down from now.
+function countdownMenu(button) {
+  const wrap = el('div', { className: 'task-dd look-tag' });
+  const menu = el('div', { className: 'dd-menu dd-right', hidden: true });
+  const custom = el('input', { className: 'input', type: 'number', min: '1', max: '1440', step: '1', placeholder: 'Minutes', ariaLabel: 'Minutes' });
+  const pick = (minutes) => act(() => data.setCountdown(minutes));
+  const counting = data.isCountdown(state.timer);
+
+  menu.append(
+    el('button', { type: 'button', className: 'dd-option', ariaChecked: String(!counting), onclick: () => pick(null) },
+      el('span', { className: 'checkbox' }, counting ? null : icon('check', 12)), 'Count up'),
+    el('div', { className: 'dd-group' }, counting ? 'Restart countdown from now' : 'Count down from now'),
+    el('div', { className: 'chips dd-chips' }, ...COUNTDOWN_PRESETS.map(([minutes, label]) =>
+      el('button', { type: 'button', className: 'chip', onclick: () => pick(minutes) }, label),
+    )),
+    el('div', { className: 'dd-custom' },
+      custom,
+      el('button', { type: 'button', className: 'btn btn-primary btn-sm', onclick: () => pick(Number(custom.value)) }, 'Set'),
+    ),
   );
+
+  const outside = (e) => { if (!wrap.contains(e.target)) close(); };
+  const escape = (e) => { if (e.key === 'Escape') close(); };
+  function close() {
+    menu.hidden = true;
+    document.removeEventListener('pointerdown', outside, true);
+    document.removeEventListener('keydown', escape);
+  }
+  button.addEventListener('click', () => {
+    if (!menu.hidden) return close();
+    menu.hidden = false;
+    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('keydown', escape);
+  });
+
+  wrap.append(button, menu);
+  return wrap;
 }
 
 // The frame every screen shares: header bar, error line, scrolling body, action bar.
@@ -378,7 +424,14 @@ function timerCard() {
       taskDropdown(data.tasksOf(t), { look: 'tag', onClose: (tasks) => act(() => data.setTimerTasks(tasks)) }),
       t.note ? el('span', { className: 'small muted grow', title: t.note }, t.note) : null,
     ),
-    el('div', { className: 'card-clock' }, bigClock()),
+    el('div', { className: 'card-clock' },
+      bigClock(),
+      countdownMenu(el('button', {
+        type: 'button',
+        className: `btn btn-sm ${running ? 'btn-on-dark' : 'btn-secondary'}`,
+        title: 'Count up or set a timer',
+      }, icon('timer', 14), data.isOvertime(t) ? "Time's up" : data.isCountdown(t) ? 'Counting down' : 'Set timer')),
+    ),
     el('div', { className: 'card-actions' },
       running
         ? iconButton('btn btn-on-dark', 'pause', 'Pause', () => act(data.pauseTimer))
@@ -487,9 +540,33 @@ function startScreen({ clientId: chosen } = {}) {
   }
   update();
 
-  const start = () => actThenClose(
-    () => data.startTimer({ clientId, tasks, note: noteInput.value.trim() }),
-  );
+  // Count up, or count down from a set time. The minutes box is what counts;
+  // the chips just fill it in.
+  let countingDown = false;
+  const minutesInput = el('input', { className: 'input minutes-input', type: 'number', min: '1', max: '1440', step: '1', value: '30', ariaLabel: 'Minutes', title: 'Minutes' });
+  const modeBox = el('div', { className: 'stack mode-box' });
+  function drawMode() {
+    const presets = COUNTDOWN_PRESETS.map(([minutes, label]) => {
+      const chip = el('button', {
+        className: 'chip',
+        ariaPressed: String(Number(minutesInput.value) === minutes),
+        onclick: () => { minutesInput.value = minutes; drawMode(); },
+      }, label);
+      return chip;
+    });
+    modeBox.replaceChildren(
+      segmented([['up', 'Count up'], ['down', 'Count down']], countingDown ? 'down' : 'up', (mode) => { countingDown = mode === 'down'; drawMode(); }),
+      ...(countingDown ? [el('div', { className: 'chips mode-chips' }, ...presets, minutesInput, el('span', { className: 'small muted' }, 'min'))] : []),
+    );
+  }
+  drawMode();
+
+  const start = () => actThenClose(() => data.startTimer({
+    clientId,
+    tasks,
+    note: noteInput.value.trim(),
+    minutes: countingDown ? Number(minutesInput.value) : null,
+  }));
   noteInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') start(); });
 
   return screen({
@@ -500,6 +577,8 @@ function startScreen({ clientId: chosen } = {}) {
       clientRows,
       sectionHead('Tasks', 'Pick any that apply'),
       chips,
+      sectionHead('Timer'),
+      modeBox,
       field('Note (optional)', noteInput),
     ],
     footer: [iconButton('btn btn-primary btn-block', 'play', 'Start timer', start, 'go')],

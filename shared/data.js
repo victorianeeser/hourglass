@@ -7,6 +7,8 @@
 //   entries:      [{ id, clientId, tasks, note, start, end, rate }]   (times are ms timestamps)
 //   timer:        null, or { status: 'running' | 'paused', clientId, tasks, note, start, carriedMs }
 //   (tasks is a list, e.g. ['Photoshop', 'Figma']. Older data has a single `task`; use tasksOf().)
+//   (timer.targetMs, if set, makes the clock count down: it's the session time at which the
+//    countdown hits zero. timer.alerted means the "time's up" notification already went out.)
 //   lastClientId: the client used most recently (preselected next time)
 //   theme:        'light', 'dark', or null to follow the computer's setting
 //
@@ -147,11 +149,13 @@ async function saveTimerState(state) {
   });
 }
 
-export async function startTimer({ clientId, tasks, note }) {
+// `minutes` (optional) starts it counting down instead of up.
+export async function startTimer({ clientId, tasks, note, minutes = null }) {
+  checkMinutes(minutes);
   const state = await getState();
   const now = Date.now();
   closeRunningStretch(state, now); // one timer at a time
-  state.timer = { status: 'running', clientId, tasks, note, start: now, carriedMs: 0 };
+  state.timer = { status: 'running', clientId, tasks, note, start: now, carriedMs: 0, targetMs: minutes ? minutes * 60000 : null };
   state.lastClientId = clientId;
   await saveTimerState(state);
 }
@@ -184,6 +188,31 @@ export async function setTimerTasks(tasks) {
   state.timer = { ...state.timer, tasks };
   delete state.timer.task;
   await saveTimerState(state);
+}
+
+function checkMinutes(minutes) {
+  if (minutes !== null && !(Number.isInteger(minutes) && minutes >= 1 && minutes <= 1440)) {
+    throw new Error('Enter a whole number of minutes, from 1 to 1440.');
+  }
+}
+
+// Switch the current timer between counting up (minutes = null) and counting
+// down `minutes` from right now. Billing is unaffected: only real time is logged.
+export async function setCountdown(minutes) {
+  checkMinutes(minutes);
+  const state = await getState();
+  if (!state.timer) return;
+  state.timer = {
+    ...state.timer,
+    targetMs: minutes ? sessionMs(state.timer) + minutes * 60000 : null,
+    alerted: false,
+  };
+  await saveTimerState(state);
+}
+
+export async function markCountdownAlerted() {
+  const { timer } = await getState();
+  if (timer) await chrome.storage.local.set({ timer: { ...timer, alerted: true } });
 }
 
 export async function stopTimer() {
@@ -220,6 +249,43 @@ export function sessionMs(timer, now = Date.now()) {
   if (!timer) return 0;
   const current = timer.status === 'running' ? now - timer.start : 0;
   return timer.carriedMs + current;
+}
+
+export function isCountdown(timer) {
+  return Boolean(timer && timer.targetMs);
+}
+
+// Time left on a countdown (negative once it has passed zero)
+export function remainingMs(timer, now = Date.now()) {
+  return timer.targetMs - sessionMs(timer, now);
+}
+
+export function isOvertime(timer, now = Date.now()) {
+  return isCountdown(timer) && remainingMs(timer, now) <= 0;
+}
+
+// What the clock shows: "0:42:10" counting up or down, "+0:03:10" past zero
+export function clockText(timer, now = Date.now()) {
+  if (!isCountdown(timer)) return formatDuration(sessionMs(timer, now));
+  const left = remainingMs(timer, now);
+  if (left > 0) return formatDuration(Math.ceil(left / 1000) * 1000); // reads 0:00:01 until it hits zero
+  return '+' + formatDuration(-left);
+}
+
+// The same for the toolbar badge, which fits about 4 characters: "0:42", "+3m", "+2h"
+export function badgeText(timer, now = Date.now()) {
+  if (!isCountdown(timer)) return formatBadge(sessionMs(timer, now));
+  const left = remainingMs(timer, now);
+  if (left > 0) return formatBadge(Math.ceil(left / 60000) * 60000);
+  const minutes = Math.floor(-left / 60000);
+  return minutes < 60 ? `+${minutes}m` : `+${Math.floor(minutes / 60)}h`;
+}
+
+// How long until the badge text next changes
+export function msToNextBadgeChange(timer, now = Date.now()) {
+  if (!isCountdown(timer)) return 60000 - (sessionMs(timer, now) % 60000);
+  const left = remainingMs(timer, now);
+  return left > 0 ? (left % 60000 || 60000) : 60000 - (-left % 60000);
 }
 
 export function entryMs(entry) {

@@ -608,6 +608,20 @@ select.input {
 /* Paused: a calm white card; the clock dims */
 .card.paused .clock { color: var(--muted); }
 
+/* Past zero on a countdown: amber means "needs attention" */
+.clock.over { color: var(--idle); }
+.card.paused .clock.over { color: var(--paused-text); }
+
+/* Count up / set a timer menu next to the clock */
+.dd-right { left: auto; right: 0; }
+.dd-chips { padding: 4px 6px; }
+.dd-chips .chip { height: 26px; padding: 0 9px; font-size: 12px; }
+.dd-custom { padding: 4px 6px 6px; display: flex; gap: 6px; }
+.dd-custom .input { flex: 1; min-width: 0; height: 28px; }
+.mode-box { gap: 8px; flex: none; }
+.mode-chips { align-items: center; }
+.minutes-input { width: 64px; height: 28px; padding: 0 6px; }
+
 /* ---------- Dashboard ---------- */
 
 .totals { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
