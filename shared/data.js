@@ -272,20 +272,41 @@ export function clockText(timer, now = Date.now()) {
   return '+' + formatDuration(-left);
 }
 
-// The same for the toolbar badge, which fits about 4 characters: "0:42", "+3m", "+2h"
+// The countdown time exactly as the clock shows it (whole seconds, rounded up)
+function shownLeft(left) {
+  return Math.ceil(left / 1000) * 1000;
+}
+
+// The same for the toolbar badge, which fits about 4 characters. It matches the clock's
+// hours and minutes, and ticks seconds under a minute so it never looks stuck:
+// "0:42", ":42", "+12s", "+3m", "+2h"
 export function badgeText(timer, now = Date.now()) {
-  if (!isCountdown(timer)) return formatBadge(sessionMs(timer, now));
+  const seconds = (ms) => String(Math.floor(ms / 1000)).padStart(2, '0');
+  if (!isCountdown(timer)) {
+    const ms = sessionMs(timer, now);
+    return ms < 60000 ? `:${seconds(ms)}` : formatBadge(ms);
+  }
   const left = remainingMs(timer, now);
-  if (left > 0) return formatBadge(Math.ceil(left / 60000) * 60000);
-  const minutes = Math.floor(-left / 60000);
+  if (left > 0) {
+    const shown = shownLeft(left);
+    return shown < 60000 ? `:${seconds(shown)}` : formatBadge(shown);
+  }
+  const over = -left;
+  if (over < 60000) return `+${Math.floor(over / 1000)}s`;
+  const minutes = Math.floor(over / 60000);
   return minutes < 60 ? `+${minutes}m` : `+${Math.floor(minutes / 60)}h`;
 }
 
 // How long until the badge text next changes
 export function msToNextBadgeChange(timer, now = Date.now()) {
-  if (!isCountdown(timer)) return 60000 - (sessionMs(timer, now) % 60000);
+  const paced = (ms) => (ms < 60000 ? 1000 - (ms % 1000) : 60000 - (ms % 60000));
+  if (!isCountdown(timer)) return paced(sessionMs(timer, now));
   const left = remainingMs(timer, now);
-  return left > 0 ? (left % 60000 || 60000) : 60000 - (-left % 60000);
+  if (left <= 0) return paced(-left);
+  const shown = shownLeft(left);
+  if (shown < 60000) return left % 1000 || 1000;
+  // The clock drops below this minute one second after it reads exactly :00
+  return left - (Math.floor(shown / 60000) * 60000 - 1000);
 }
 
 export function entryMs(entry) {

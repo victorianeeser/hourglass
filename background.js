@@ -7,7 +7,8 @@
 // It never starts or changes timers on its own (manual timers only).
 //
 // Chrome puts this worker to sleep when it's idle, so instead of a ticking
-// interval it sets an alarm for the exact moment the badge's minute changes.
+// interval it sets an alarm for the exact moment the badge's text changes
+// (each second under a minute, otherwise each minute).
 
 import * as data from './shared/data.js';
 
@@ -40,7 +41,7 @@ async function updateBadge() {
   });
 
   if (running) {
-    // Wake up again right when the minute on the badge changes.
+    // Wake up again right when the badge text changes.
     chrome.alarms.create(BADGE_ALARM, { when: Date.now() + data.msToNextBadgeChange(t) + 50 });
 
     if (data.isCountdown(t)) {
