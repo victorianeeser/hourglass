@@ -1,26 +1,26 @@
 # Hourglass
 
-A personal billable-time tracker for freelance design work. Start a timer for a client, see totals, and export a CSV for your invoices. Everything stays on your computer.
+A billable-time tracker for freelancers, as a Chrome extension. Start a timer for a client, see who you're billing on every webpage, and export a CSV for your invoices. Everything stays on your computer: no accounts, no servers.
 
-## Install (Load unpacked)
+## Install in Chrome
 
-1. Download or clone this folder.
-2. Open `chrome://extensions` in Chrome.
-3. Turn on **Developer mode** (top right).
-4. Click **Load unpacked** and choose this folder (the one with `manifest.json`).
-5. Pin Hourglass from the puzzle-piece menu so it shows in your toolbar.
-6. Refresh any tabs that were already open, so the floating pill can appear on them.
+1. On this GitHub page, click the green **Code** button, then **Download ZIP**.
+2. Unzip it and put the folder somewhere permanent, like your Documents folder. (Downloads is easy to clean out by accident.)
+3. In Chrome, go to `chrome://extensions` (paste it into the address bar).
+4. Turn on **Developer mode** (top right).
+5. Click **Load unpacked** and choose the unzipped folder, the one with `manifest.json` directly inside it.
+6. Click the puzzle-piece icon in your toolbar, then the pin next to **Hourglass**.
+7. Refresh any tabs that are already open, so the floating timer can appear on them.
 
-Chrome will say the extension can "read and change your data on all websites". That's only so the floating pill can appear on every page; Hourglass never reads page content and never sends anything anywhere.
+Click the hourglass icon to add your first client and start a timer.
 
-Shortcut: **Option+Shift+H** (Mac) or **Alt+Shift+H** (Windows) opens the popup. Change it at `chrome://extensions/shortcuts`.
+## Keep your data safe
 
-## Files
+Your hours are stored in Chrome, not in the folder.
 
-- `manifest.json` — tells Chrome what the extension is and what it can do
-- `background.js` — keeps the toolbar badge showing the running time; opens the dashboard for the pill
-- `pill/pill.js` — the floating pill on every webpage (built in a Shadow DOM so sites can't restyle it)
-- `icons/` — the logo, plus the toolbar and extension-page icons made from it
-- `shared/data.js` — all saving and loading (clients, entries, timer) plus totals math
-- `popup/` — the toolbar popup: `popup.js` draws one screen at a time, `popup.css` has the design
-- `fonts/` — DM Sans, plus DM Mono for the running clock (both Open Font License), bundled so the extension never goes online
+- **Don't move or rename the folder.** Chrome would treat it as a new extension, and it would open empty.
+- **Don't click Remove on the extension.** That deletes your hours. Use **Export CSV** to keep a copy.
+
+## Good to know
+
+Chrome may say the extension can "read and change your data on all websites." That's only so the floating timer can appear on any page. Hourglass doesn't read page content or send anything anywhere.
