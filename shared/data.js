@@ -13,6 +13,7 @@
 //    until you're back; once set, Hourglass asks whether to keep or discard that time.)
 //   lastClientId: the client used most recently (preselected next time)
 //   theme:        'light', 'dark', or null to follow the computer's setting
+//   settings:     choices from the Settings screen; read them through settingsOf()
 //
 // We store timestamps, never a running count: elapsed time is always
 // "now - start", so it stays correct even if Chrome puts the extension to sleep.
@@ -55,7 +56,7 @@ export function colorHex(name) {
   return CLIENT_COLORS[name] || CLIENT_COLORS[COLOR_ALIASES[name]] || '#6E6862';
 }
 
-const DEFAULTS = { clients: [], entries: [], timer: null, lastClientId: null, theme: null };
+const DEFAULTS = { clients: [], entries: [], timer: null, lastClientId: null, theme: null, settings: {} };
 
 // crypto.randomUUID only exists on https pages, and the pill also runs on plain http pages.
 function newId() {
@@ -90,6 +91,22 @@ export function findClient(state, id) {
 }
 
 // ---------- Settings ----------
+
+export const DEFAULT_SETTINGS = {
+  idleEnabled: true,  // ask about time spent away
+  idleMinutes: 5,     // how long away before asking
+  showPill: true,     // the floating pill on webpages
+  notifications: true, // Chrome notifications (time's up, away)
+};
+
+export function settingsOf(state) {
+  return { ...DEFAULT_SETTINGS, ...state.settings };
+}
+
+export async function updateSettings(changes) {
+  const state = await getState();
+  await chrome.storage.local.set({ settings: { ...state.settings, ...changes } });
+}
 
 export async function setTheme(theme) {
   await chrome.storage.local.set({ theme });
@@ -195,21 +212,26 @@ export async function setTimerTasks(tasks) {
 
 // ---------- Idle check ----------
 
-export const IDLE_MS = 5 * 60000; // this long away before Hourglass asks
+// How long away before Hourglass asks, in ms
+export function idleMs(state) {
+  return settingsOf(state).idleMinutes * 60000;
+}
 
 // You've gone away. Only a running timer needs watching, and only the first signal counts.
 export async function markAway(since) {
-  const { timer } = await getState();
-  if (!timer || timer.status !== 'running' || timer.away) return;
+  const state = await getState();
+  const { timer } = state;
+  if (!settingsOf(state).idleEnabled || !timer || timer.status !== 'running' || timer.away) return;
   await chrome.storage.local.set({ timer: { ...timer, away: { since: Math.max(since, timer.start), until: null } } });
 }
 
 // You're back. Returns true if you were gone long enough to be asked.
 // Shorter absences (like locking your screen for a minute) are just forgotten.
 export async function markBack(now = Date.now()) {
-  const { timer } = await getState();
+  const state = await getState();
+  const { timer } = state;
   if (!timer || !timer.away || timer.away.until) return false;
-  const longEnough = now - timer.away.since >= IDLE_MS;
+  const longEnough = now - timer.away.since >= idleMs(state);
   await chrome.storage.local.set({
     timer: { ...timer, away: longEnough ? { ...timer.away, until: now } : null },
   });

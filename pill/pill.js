@@ -195,9 +195,9 @@
     clocks = [];
     const t = state && state.timer;
     const client = t && data.findClient(state, t.clientId);
-    if (!t || !client) {
+    if (!t || !client || !data.settingsOf(state).showPill) {
       open = false;
-      host.remove(); // nothing running: no pill
+      host.remove(); // nothing running, or turned off in Settings: no pill
       return;
     }
     if (!host.isConnected) document.documentElement.append(host);
@@ -292,7 +292,7 @@
 
   // Redraw whenever the timer or clients change (from the popup, another tab, or here)
   chrome.storage.onChanged.addListener(async (changes, area) => {
-    if (area !== 'local' || !(changes.timer || changes.clients)) return;
+    if (area !== 'local' || !(changes.timer || changes.clients || changes.settings)) return;
     state = await data.getState();
     render();
   });
@@ -304,6 +304,7 @@
       return;
     }
     if (!state || !state.timer) return;
+    if (!data.settingsOf(state).showPill) return;
     if (!host.isConnected) document.documentElement.append(host); // some sites rebuild the page
     const text = data.clockText(state.timer);
     for (const node of clocks) {

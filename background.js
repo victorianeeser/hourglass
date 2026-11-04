@@ -58,6 +58,7 @@ async function updateBadge() {
 // Time's up. The clock keeps tracking past zero, because only you decide when work stops.
 async function announceCountdownDone(client) {
   await data.markCountdownAlerted();
+  if (!data.settingsOf(await data.getState()).notifications) return; // the clock and badge still turn amber
   chrome.notifications.create('hourglass-countdown', {
     type: 'basic',
     iconUrl: chrome.runtime.getURL('icons/icon128.png'),
@@ -70,12 +71,15 @@ async function announceCountdownDone(client) {
 // chrome.idle watches the whole computer, not just Chrome. It wakes this worker when
 // you've gone idle (no mouse or keyboard for 5 minutes), lock the screen, or return.
 
-const idleSeconds = data.IDLE_MS / 1000;
-chrome.idle.setDetectionInterval(idleSeconds);
+// Chrome needs the idle time set each time this worker starts, and after you change it.
+async function applyIdleTime() {
+  chrome.idle.setDetectionInterval(data.idleMs(await data.getState()) / 1000);
+}
+applyIdleTime();
 
 chrome.idle.onStateChanged.addListener(async (idleState) => {
   const now = Date.now();
-  if (idleState === 'idle') await data.markAway(now - data.IDLE_MS); // you left 5 minutes ago
+  if (idleState === 'idle') await data.markAway(now - data.idleMs(await data.getState())); // when you actually left
   else if (idleState === 'locked') await data.markAway(now);
   else if (await data.markBack(now)) await askAboutAwayTime();
 });
@@ -85,7 +89,7 @@ async function askAboutAwayTime() {
   const state = await data.getState();
   const away = data.awayPrompt(state.timer);
   const client = away && data.findClient(state, state.timer.clientId);
-  if (!client) return;
+  if (!client || !data.settingsOf(state).notifications) return;
   chrome.notifications.create(AWAY_NOTIFICATION, {
     type: 'basic',
     iconUrl: chrome.runtime.getURL('icons/icon128.png'),
@@ -106,9 +110,10 @@ chrome.notifications.onButtonClicked.addListener((id, button) => {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== BADGE_ALARM && alarm.name !== COUNTDOWN_ALARM) return;
   // An alarm this late means the computer was asleep, which chrome.idle can miss.
-  if (Date.now() - alarm.scheduledTime >= data.IDLE_MS) {
+  const wait = data.idleMs(await data.getState());
+  if (Date.now() - alarm.scheduledTime >= wait) {
     await data.markAway(alarm.scheduledTime);
-    if ((await chrome.idle.queryState(idleSeconds)) === 'active' && (await data.markBack())) await askAboutAwayTime();
+    if ((await chrome.idle.queryState(wait / 1000)) === 'active' && (await data.markBack())) await askAboutAwayTime();
   }
   updateBadge();
 });
@@ -116,6 +121,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // Any change to the timer (from the popup, or later the pill) refreshes the badge.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && (changes.timer || changes.clients)) updateBadge();
+  if (area === 'local' && changes.settings) applyIdleTime();
 });
 
 // The pill's "Open dashboard" button. Content scripts can't open the popup

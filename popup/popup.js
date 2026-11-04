@@ -230,17 +230,6 @@ function applyTheme() {
   document.documentElement.dataset.theme = currentTheme();
 }
 
-function themeToggle() {
-  const dark = currentTheme() === 'dark';
-  const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
-  return el('button', {
-    className: 'icon-btn',
-    ariaLabel: label,
-    title: label,
-    onclick: () => act(() => data.setTheme(dark ? 'light' : 'dark')),
-  }, icon(dark ? 'sun' : 'moon', 16));
-}
-
 function isRunning() {
   return Boolean(state.timer && state.timer.status === 'running');
 }
@@ -330,7 +319,7 @@ function dashboardScreen() {
     el('button', { className: 'nav-link', onclick: () => go('entries') }, 'Entries'),
     el('button', { className: 'nav-link', onclick: () => go('stats') }, 'Stats'),
     el('button', { className: 'nav-link', onclick: () => go('clients') }, 'Clients'),
-    themeToggle(),
+    el('button', { className: 'icon-btn', ariaLabel: 'Settings', title: 'Settings', onclick: () => go('settings') }, icon('gear', 16)),
   ];
 
   // First run: nothing to track yet
@@ -1111,6 +1100,71 @@ function breakdown(title, groups, total, measure, describe) {
   ];
 }
 
+// ---------- Settings ----------
+
+const IDLE_PRESETS = [5, 10, 15, 30];
+
+// A labelled on/off switch row
+function switchRow(label, on, onChange) {
+  return el('button', {
+    className: 'row switch-row',
+    role: 'switch',
+    ariaChecked: String(on),
+    onclick: () => act(() => onChange(!on)),
+  }, el('span', { className: 'grow' }, label), el('span', { className: 'switch' }));
+}
+
+function settingsScreen() {
+  const settings = data.settingsOf(state);
+
+  const minutes = el('input', { className: 'input minutes-input', type: 'number', min: '1', max: '120', step: '1', value: String(settings.idleMinutes), ariaLabel: 'Minutes away before asking' });
+  const saveMinutes = (value) => act(async () => {
+    if (!(Number.isInteger(value) && value >= 1 && value <= 120)) throw new Error('Enter a whole number of minutes, from 1 to 120.');
+    await data.updateSettings({ idleMinutes: value });
+  });
+  minutes.addEventListener('change', () => saveMinutes(Number(minutes.value)));
+
+  return screen({
+    title: 'Settings',
+    back: () => go('dashboard'),
+    body: [
+      sectionHead('Appearance'),
+      segmented([['light', 'Light'], ['dark', 'Dark'], ['system', 'Match computer']], state.theme || 'system',
+        (theme) => act(() => data.setTheme(theme === 'system' ? null : theme))),
+
+      sectionHead('Idle check'),
+      el('div', { className: 'list' },
+        switchRow('Ask about time I was away', settings.idleEnabled, (on) => data.updateSettings({ idleEnabled: on })),
+        settings.idleEnabled ? el('div', { className: 'setting-detail' },
+          el('span', { className: 'small muted' }, 'Ask after I\u2019ve been away for'),
+          el('div', { className: 'chips mode-chips' },
+            ...IDLE_PRESETS.map((value) => el('button', {
+              className: 'chip',
+              ariaPressed: String(settings.idleMinutes === value),
+              onclick: () => saveMinutes(value),
+            }, `${value}m`)),
+            minutes,
+            el('span', { className: 'small muted' }, 'min'),
+          ),
+        ) : null,
+      ),
+
+      sectionHead('While I work'),
+      el('div', { className: 'list' },
+        switchRow('Show the floating pill on webpages', settings.showPill, (on) => data.updateSettings({ showPill: on })),
+        switchRow('Chrome notifications', settings.notifications, (on) => data.updateSettings({ notifications: on })),
+        el('button', { className: 'row', onclick: () => chrome.tabs.create({ url: 'chrome://extensions/shortcuts' }) },
+          el('span', { className: 'grow' }, 'Keyboard shortcut'),
+          el('span', { className: 'meta' }, 'Change'),
+          icon('chevron', 14, 'chev'),
+        ),
+      ),
+
+      el('p', { className: 'small muted settings-about' }, `Hourglass ${chrome.runtime.getManifest().version} \u00b7 Your data stays on this computer.`),
+    ],
+  });
+}
+
 // ---------- Export CSV ----------
 
 function exportScreen() {
@@ -1200,6 +1254,7 @@ const screens = {
   past: pastScreen,
   export: exportScreen,
   stats: statsScreen,
+  settings: settingsScreen,
 };
 
 // ---------- Start up ----------
